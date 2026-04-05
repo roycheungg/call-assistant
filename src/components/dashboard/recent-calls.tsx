@@ -18,40 +18,40 @@ interface Call {
 
 export function RecentCalls({ calls }: { calls: Call[] }) {
   return (
-    <Card>
+    <Card className="border-white/10 bg-[#161b22]">
       <CardHeader>
-        <CardTitle className="text-lg">Recent Calls</CardTitle>
+        <CardTitle className="text-lg text-white">Recent Calls</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3">
         {calls.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
+          <p className="text-sm text-slate-500 text-center py-8">
             No calls yet. Calls will appear here once your AI assistant starts taking calls.
           </p>
         ) : (
           calls.map((call) => (
             <div
               key={call.id}
-              className="flex items-start gap-4 p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+              className="flex items-start gap-4 p-3 rounded-xl border border-white/5 bg-white/[0.02] hover:bg-white/5 transition-colors"
             >
-              <div className="w-9 h-9 bg-blue-50 rounded-full flex items-center justify-center shrink-0">
-                <Phone className="w-4 h-4 text-blue-600" />
+              <div className="w-9 h-9 bg-blue-600/15 rounded-full flex items-center justify-center shrink-0">
+                <Phone className="w-4 h-4 text-blue-400" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-sm">
+                  <span className="font-medium text-sm text-white">
                     {call.lead?.name || call.phoneNumber}
                   </span>
                   {call.lead?.company && (
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-xs text-slate-500">
                       {call.lead.company}
                     </span>
                   )}
                   <SentimentBadge sentiment={call.sentiment} />
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                <p className="text-xs text-slate-500 mt-0.5 truncate">
                   {call.summary || "No summary available"}
                 </p>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
+                <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-600">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {formatDuration(call.duration)}
