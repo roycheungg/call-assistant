@@ -19,7 +19,8 @@ jobs:
             cd /home/kaia/doai-call-assistant
 
             echo "==> Pulling latest code..."
-            git pull origin master
+            git fetch origin master
+            git reset --hard origin/master
 
             echo "==> Installing dependencies..."
             npm install
