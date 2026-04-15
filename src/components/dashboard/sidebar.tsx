@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import {
   LayoutDashboard,
   Phone,
+  MessageCircle,
   Users,
   CalendarClock,
   Settings,
@@ -15,6 +16,7 @@ import {
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calls", label: "Call History", icon: Phone },
+  { href: "/conversations", label: "WhatsApp", icon: MessageCircle },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/callbacks", label: "Callbacks", icon: CalendarClock },
   { href: "/settings", label: "Settings", icon: Settings },
