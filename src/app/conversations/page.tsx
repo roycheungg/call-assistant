@@ -15,24 +15,46 @@ import { ConversationListItem } from "@/components/conversations/conversation-li
 import { ContactPanel } from "@/components/conversations/contact-panel";
 import { MessageBubble } from "@/components/conversations/message-bubble";
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  status: string;
-  createdAt: string;
-}
+type Channel = "whatsapp" | "website";
 
 interface ConversationSummary {
   id: string;
-  waId: string;
-  phoneNumber: string;
+  channel: Channel;
   contactName: string | null;
+  identifier: string;
+  lastMessage: string | null;
+  lastMessageAt: string;
+  isRead: boolean;
+  starred: boolean;
+  status: string;
+  createdAt: string;
+  messageCount: number;
+  lead: { id: string; name: string | null; company: string | null } | null;
+  siteName?: string;
+}
+
+interface DetailMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  createdAt: string;
+}
+
+interface ConversationDetail {
+  id: string;
+  channel: Channel;
+  contactName: string | null;
+  phoneNumber: string;
+  visitorEmail?: string | null;
+  visitorPhone?: string | null;
   status: string;
   isRead: boolean;
   starred: boolean;
-  lastMessageAt: string;
   createdAt: string;
+  lastMessageAt: string;
+  userAgent?: string | null;
+  referrer?: string | null;
+  site?: { name: string; siteId: string; botName: string } | null;
   lead: {
     id: string;
     name: string | null;
@@ -42,16 +64,11 @@ interface ConversationSummary {
     status: string;
     source: string;
   } | null;
-  _count: { messages: number };
-  messages: Array<{ content: string; role: string; createdAt: string }>;
-}
-
-interface ConversationDetail
-  extends Omit<ConversationSummary, "messages" | "_count"> {
-  messages: Message[];
+  messages: DetailMessage[];
 }
 
 type Filter = "all" | "unread" | "recent" | "starred";
+type ChannelFilter = "all" | "whatsapp" | "website";
 
 const FILTER_TABS: { value: Filter; label: string }[] = [
   { value: "unread", label: "Unread" },
@@ -60,18 +77,24 @@ const FILTER_TABS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
 ];
 
+const CHANNEL_TABS: { value: ChannelFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "whatsapp", label: "WhatsApp" },
+  { value: "website", label: "Website" },
+];
+
 export default function ConversationsPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversation, setActiveConversation] =
     useState<ConversationDetail | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedChannel, setSelectedChannel] = useState<Channel>("whatsapp");
   const [filter, setFilter] = useState<Filter>("all");
+  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  // Mobile view state: which panel is visible on small screens
   const [mobileView, setMobileView] = useState<"list" | "chat">("list");
-  // Contact panel slide-over for tablet / small desktop
   const [contactPanelOpen, setContactPanelOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -80,6 +103,7 @@ export default function ConversationsPage() {
     try {
       const params = new URLSearchParams();
       if (filter !== "all") params.set("filter", filter);
+      if (channelFilter !== "all") params.set("channel", channelFilter);
       if (search) params.set("search", search);
       const res = await fetch(`/api/conversations?${params}`);
       const data = await res.json();
@@ -89,24 +113,27 @@ export default function ConversationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, search]);
+  }, [filter, channelFilter, search]);
 
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
-  async function selectConversation(id: string) {
+  async function selectConversation(id: string, channel: Channel) {
     setSelectedId(id);
+    setSelectedChannel(channel);
     setMobileView("chat");
     setLoadingDetail(true);
     try {
-      const res = await fetch(`/api/conversations/${id}`);
+      const res = await fetch(`/api/conversations/${id}?channel=${channel}`);
       if (!res.ok) throw new Error("Not found");
       const data: ConversationDetail = await res.json();
       setActiveConversation(data);
 
       if (!data.isRead) {
-        fetch(`/api/conversations/${id}/read`, { method: "PATCH" });
+        fetch(`/api/conversations/${id}/read?channel=${channel}`, {
+          method: "PATCH",
+        });
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, isRead: true } : c))
         );
@@ -125,7 +152,7 @@ export default function ConversationsPage() {
   async function toggleStar() {
     if (!activeConversation) return;
     const res = await fetch(
-      `/api/conversations/${activeConversation.id}/star`,
+      `/api/conversations/${activeConversation.id}/star?channel=${activeConversation.channel}`,
       { method: "PATCH" }
     );
     if (res.ok) {
@@ -141,9 +168,26 @@ export default function ConversationsPage() {
     }
   }
 
+  // For the ContactPanel we need to adapt the website shape to what the panel expects
+  const contactPanelData = activeConversation
+    ? {
+        id: activeConversation.id,
+        phoneNumber:
+          activeConversation.phoneNumber ||
+          activeConversation.visitorPhone ||
+          activeConversation.visitorEmail ||
+          "",
+        contactName: activeConversation.contactName,
+        status: activeConversation.status,
+        starred: activeConversation.starred,
+        createdAt: activeConversation.createdAt,
+        lead: activeConversation.lead,
+      }
+    : null;
+
   return (
     <div className="flex h-full overflow-hidden">
-      {/* LEFT PANEL - Conversation list */}
+      {/* LEFT PANEL */}
       <aside
         className={cn(
           "flex-col bg-[#161b22] border-r border-white/10 shrink-0",
@@ -154,6 +198,25 @@ export default function ConversationsPage() {
         <div className="p-3 border-b border-white/10 shrink-0">
           <h2 className="font-semibold text-sm mb-3">Conversations</h2>
 
+          {/* Channel tabs */}
+          <div className="flex gap-1 mb-2">
+            {CHANNEL_TABS.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => setChannelFilter(tab.value)}
+                className={cn(
+                  "flex-1 px-2 py-1 rounded-md text-[11px] font-medium transition-colors",
+                  channelFilter === tab.value
+                    ? "bg-white/10 text-white"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Filter tabs */}
           <div className="flex gap-1 mb-3 flex-wrap">
             {FILTER_TABS.map((tab) => (
               <button
@@ -195,23 +258,24 @@ export default function ConversationsPage() {
           ) : (
             conversations.map((conv) => (
               <ConversationListItem
-                key={conv.id}
+                key={`${conv.channel}-${conv.id}`}
                 id={conv.id}
-                contactName={conv.contactName || conv.lead?.name || null}
-                phoneNumber={conv.phoneNumber}
-                lastMessage={conv.messages[0]?.content || null}
+                channel={conv.channel}
+                contactName={conv.contactName}
+                phoneNumber={conv.identifier}
+                lastMessage={conv.lastMessage}
                 lastMessageAt={conv.lastMessageAt}
                 isRead={conv.isRead}
                 starred={conv.starred}
                 isActive={conv.id === selectedId}
-                onClick={() => selectConversation(conv.id)}
+                onClick={() => selectConversation(conv.id, conv.channel)}
               />
             ))
           )}
         </div>
       </aside>
 
-      {/* MIDDLE PANEL - Messages */}
+      {/* MIDDLE PANEL */}
       <section
         className={cn(
           "flex-1 flex-col min-w-0",
@@ -230,7 +294,6 @@ export default function ConversationsPage() {
         ) : activeConversation ? (
           <>
             <header className="px-3 md:px-4 py-3 border-b border-white/10 flex items-center gap-2 shrink-0">
-              {/* Mobile back button */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -244,14 +307,17 @@ export default function ConversationsPage() {
                 <h3 className="font-semibold text-sm truncate">
                   {activeConversation.contactName ||
                     activeConversation.lead?.name ||
-                    activeConversation.phoneNumber}
+                    activeConversation.visitorEmail ||
+                    activeConversation.phoneNumber ||
+                    "Unknown"}
                 </h3>
                 <p className="text-[11px] text-slate-500 truncate">
-                  {activeConversation.phoneNumber}
+                  {activeConversation.channel === "website"
+                    ? activeConversation.site?.name || "Website"
+                    : activeConversation.phoneNumber}
                 </p>
               </div>
 
-              {/* Contact panel toggle - hidden on xl where panel is always visible */}
               <Button
                 variant="ghost"
                 size="sm"
@@ -278,11 +344,11 @@ export default function ConversationsPage() {
         ) : null}
       </section>
 
-      {/* RIGHT PANEL - Contact details (always visible on xl+) */}
+      {/* RIGHT PANEL */}
       <aside className="hidden xl:flex xl:flex-col xl:w-80 2xl:w-96 border-l border-white/10 bg-[#161b22] shrink-0">
-        {activeConversation ? (
+        {contactPanelData ? (
           <ContactPanel
-            conversation={activeConversation}
+            conversation={contactPanelData}
             onToggleStar={toggleStar}
           />
         ) : (
@@ -292,8 +358,8 @@ export default function ConversationsPage() {
         )}
       </aside>
 
-      {/* Contact panel slide-over (mobile/tablet) */}
-      {contactPanelOpen && activeConversation && (
+      {/* Contact panel slide-over */}
+      {contactPanelOpen && contactPanelData && (
         <div className="xl:hidden fixed inset-0 z-50 flex">
           <button
             className="flex-1 bg-black/60 backdrop-blur-sm"
@@ -314,7 +380,7 @@ export default function ConversationsPage() {
             </div>
             <div className="flex-1 overflow-hidden">
               <ContactPanel
-                conversation={activeConversation}
+                conversation={contactPanelData}
                 onToggleStar={toggleStar}
               />
             </div>

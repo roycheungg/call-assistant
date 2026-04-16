@@ -1,13 +1,51 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
-  _request: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(req.url);
+    const channel = searchParams.get("channel") || "whatsapp";
 
+    if (channel === "website") {
+      const conv = await prisma.websiteConversation.findUnique({
+        where: { id },
+        include: {
+          lead: true,
+          site: { select: { name: true, siteId: true, botName: true } },
+          messages: { orderBy: { createdAt: "asc" } },
+        },
+      });
+
+      if (!conv) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+
+      // Normalized shape
+      return NextResponse.json({
+        id: conv.id,
+        channel: "website",
+        contactName: conv.visitorName,
+        phoneNumber: conv.visitorPhone || "",
+        visitorEmail: conv.visitorEmail,
+        visitorPhone: conv.visitorPhone,
+        status: conv.status,
+        isRead: conv.isRead,
+        starred: conv.starred,
+        createdAt: conv.createdAt,
+        lastMessageAt: conv.lastMessageAt,
+        userAgent: conv.userAgent,
+        referrer: conv.referrer,
+        site: conv.site,
+        lead: conv.lead,
+        messages: conv.messages,
+      });
+    }
+
+    // WhatsApp (default)
     const conversation = await prisma.whatsAppConversation.findUnique({
       where: { id },
       include: {
@@ -23,7 +61,10 @@ export async function GET(
       );
     }
 
-    return NextResponse.json(conversation);
+    return NextResponse.json({
+      ...conversation,
+      channel: "whatsapp",
+    });
   } catch (error) {
     console.error("[CONVERSATION API] GET error:", error);
     return NextResponse.json(

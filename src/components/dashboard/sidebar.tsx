@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   Phone,
   MessageCircle,
+  Globe,
   Users,
   CalendarClock,
   Settings,
@@ -16,7 +17,8 @@ import {
 const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/calls", label: "Call History", icon: Phone },
-  { href: "/conversations", label: "WhatsApp", icon: MessageCircle },
+  { href: "/conversations", label: "Conversations", icon: MessageCircle },
+  { href: "/websites", label: "Websites", icon: Globe },
   { href: "/leads", label: "Leads", icon: Users },
   { href: "/callbacks", label: "Callbacks", icon: CalendarClock },
   { href: "/settings", label: "Settings", icon: Settings },

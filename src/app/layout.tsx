@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { Sidebar } from "@/components/dashboard/sidebar";
 import { MainWrapper } from "@/components/dashboard/main-wrapper";
 
 const inter = Inter({
@@ -29,11 +28,8 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${jetbrainsMono.variable} dark h-full antialiased`}
     >
-      <body className="h-full flex bg-[#0d1117] text-slate-200 overflow-hidden">
-        <Sidebar />
-        <main className="flex-1 overflow-auto">
-          <MainWrapper>{children}</MainWrapper>
-        </main>
+      <body className="h-full bg-[#0d1117] text-slate-200 overflow-hidden">
+        <MainWrapper>{children}</MainWrapper>
       </body>
     </html>
   );

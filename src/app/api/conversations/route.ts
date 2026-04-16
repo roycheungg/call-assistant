@@ -1,6 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
+type NormalizedConversation = {
+  id: string;
+  channel: "whatsapp" | "website";
+  contactName: string | null;
+  identifier: string; // phone or siteId+sessionId
+  lastMessage: string | null;
+  lastMessageAt: string;
+  isRead: boolean;
+  starred: boolean;
+  status: string;
+  createdAt: string;
+  messageCount: number;
+  lead: {
+    id: string;
+    name: string | null;
+    company: string | null;
+  } | null;
+  siteName?: string;
+};
+
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -8,46 +28,120 @@ export async function GET(req: NextRequest) {
     const limit = parseInt(searchParams.get("limit") || "50");
     const filter = searchParams.get("filter");
     const search = searchParams.get("search");
+    const channel = searchParams.get("channel") || "all";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const where: any = {};
-
-    if (filter === "unread") {
-      where.isRead = false;
-    } else if (filter === "starred") {
-      where.starred = true;
-    } else if (filter === "recent") {
-      where.lastMessageAt = {
+    const baseWhere: any = {};
+    if (filter === "unread") baseWhere.isRead = false;
+    else if (filter === "starred") baseWhere.starred = true;
+    else if (filter === "recent") {
+      baseWhere.lastMessageAt = {
         gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
       };
     }
 
-    if (search) {
-      where.OR = [
-        { contactName: { contains: search, mode: "insensitive" } },
-        { phoneNumber: { contains: search } },
-        { lead: { name: { contains: search, mode: "insensitive" } } },
-      ];
-    }
+    const results: NormalizedConversation[] = [];
 
-    const [conversations, total] = await Promise.all([
-      prisma.whatsAppConversation.findMany({
-        where,
+    // WhatsApp conversations
+    if (channel === "all" || channel === "whatsapp") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const waWhere: any = { ...baseWhere };
+      if (search) {
+        waWhere.OR = [
+          { contactName: { contains: search, mode: "insensitive" } },
+          { phoneNumber: { contains: search } },
+          { lead: { name: { contains: search, mode: "insensitive" } } },
+        ];
+      }
+
+      const waConvs = await prisma.whatsAppConversation.findMany({
+        where: waWhere,
         include: {
-          lead: true,
+          lead: { select: { id: true, name: true, company: true } },
           _count: { select: { messages: true } },
           messages: {
             orderBy: { createdAt: "desc" },
             take: 1,
-            select: { content: true, role: true, createdAt: true },
+            select: { content: true },
           },
         },
         orderBy: { lastMessageAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      prisma.whatsAppConversation.count({ where }),
-    ]);
+      });
+
+      for (const c of waConvs) {
+        results.push({
+          id: c.id,
+          channel: "whatsapp",
+          contactName: c.contactName || c.lead?.name || null,
+          identifier: c.phoneNumber,
+          lastMessage: c.messages[0]?.content || null,
+          lastMessageAt: c.lastMessageAt.toISOString(),
+          isRead: c.isRead,
+          starred: c.starred,
+          status: c.status,
+          createdAt: c.createdAt.toISOString(),
+          messageCount: c._count.messages,
+          lead: c.lead,
+        });
+      }
+    }
+
+    // Website conversations
+    if (channel === "all" || channel === "website") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const webWhere: any = { ...baseWhere };
+      if (search) {
+        webWhere.OR = [
+          { visitorName: { contains: search, mode: "insensitive" } },
+          { visitorEmail: { contains: search, mode: "insensitive" } },
+          { lead: { name: { contains: search, mode: "insensitive" } } },
+        ];
+      }
+
+      const webConvs = await prisma.websiteConversation.findMany({
+        where: webWhere,
+        include: {
+          lead: { select: { id: true, name: true, company: true } },
+          site: { select: { name: true, siteId: true } },
+          _count: { select: { messages: true } },
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { content: true },
+          },
+        },
+        orderBy: { lastMessageAt: "desc" },
+      });
+
+      for (const c of webConvs) {
+        results.push({
+          id: c.id,
+          channel: "website",
+          contactName: c.visitorName || c.lead?.name || null,
+          identifier: c.visitorEmail || c.sessionId.slice(0, 8),
+          lastMessage: c.messages[0]?.content || null,
+          lastMessageAt: c.lastMessageAt.toISOString(),
+          isRead: c.isRead,
+          starred: c.starred,
+          status: c.status,
+          createdAt: c.createdAt.toISOString(),
+          messageCount: c._count.messages,
+          lead: c.lead,
+          siteName: c.site.name,
+        });
+      }
+    }
+
+    // Sort merged results by lastMessageAt desc
+    results.sort(
+      (a, b) =>
+        new Date(b.lastMessageAt).getTime() -
+        new Date(a.lastMessageAt).getTime()
+    );
+
+    const total = results.length;
+    const start = (page - 1) * limit;
+    const conversations = results.slice(start, start + limit);
 
     return NextResponse.json({
       conversations,

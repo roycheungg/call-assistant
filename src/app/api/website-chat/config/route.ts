@@ -1,0 +1,55 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { corsHeaders } from "@/lib/website-chat";
+
+export async function OPTIONS(req: NextRequest) {
+  return new Response(null, {
+    status: 204,
+    headers: corsHeaders(req.headers.get("origin")),
+  });
+}
+
+export async function GET(req: NextRequest) {
+  const origin = req.headers.get("origin");
+  const headers = corsHeaders(origin);
+
+  try {
+    const { searchParams } = new URL(req.url);
+    const siteId = searchParams.get("siteId");
+
+    if (!siteId) {
+      return NextResponse.json(
+        { error: "siteId required" },
+        { status: 400, headers }
+      );
+    }
+
+    const site = await prisma.websiteConfig.findUnique({
+      where: { siteId },
+      select: {
+        siteId: true,
+        name: true,
+        botName: true,
+        greeting: true,
+        quickReplies: true,
+        brandColor: true,
+        enabled: true,
+      },
+    });
+
+    if (!site || !site.enabled) {
+      return NextResponse.json(
+        { error: "Site not found or disabled" },
+        { status: 404, headers }
+      );
+    }
+
+    return NextResponse.json(site, { headers });
+  } catch (error) {
+    console.error("[WEBSITE CHAT CONFIG] GET error:", error);
+    return NextResponse.json(
+      { error: "Internal server error" },
+      { status: 500, headers }
+    );
+  }
+}

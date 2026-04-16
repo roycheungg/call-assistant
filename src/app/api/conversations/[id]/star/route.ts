@@ -1,12 +1,30 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export async function PATCH(
-  _request: Request,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id } = await params;
+    const { searchParams } = new URL(req.url);
+    const channel = searchParams.get("channel") || "whatsapp";
+
+    if (channel === "website") {
+      const conv = await prisma.websiteConversation.findUnique({
+        where: { id },
+        select: { starred: true },
+      });
+      if (!conv) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      const updated = await prisma.websiteConversation.update({
+        where: { id },
+        data: { starred: !conv.starred },
+        select: { id: true, starred: true },
+      });
+      return NextResponse.json(updated);
+    }
 
     const conversation = await prisma.whatsAppConversation.findUnique({
       where: { id },

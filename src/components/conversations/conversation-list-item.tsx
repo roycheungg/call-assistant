@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { Star } from "lucide-react";
+import { Star, MessageCircle, Globe } from "lucide-react";
 
 interface ConversationListItemProps {
   id: string;
@@ -10,6 +10,7 @@ interface ConversationListItemProps {
   isRead: boolean;
   starred: boolean;
   isActive: boolean;
+  channel?: "whatsapp" | "website";
   onClick: () => void;
 }
 
@@ -70,10 +71,12 @@ export function ConversationListItem({
   isRead,
   starred,
   isActive,
+  channel,
   onClick,
 }: ConversationListItemProps) {
   const initials = getInitials(contactName, phoneNumber);
   const avatarColor = getAvatarColor(contactName, phoneNumber);
+  const ChannelIcon = channel === "website" ? Globe : MessageCircle;
 
   return (
     <button
@@ -85,13 +88,26 @@ export function ConversationListItem({
           : "hover:bg-white/5"
       )}
     >
-      <div
-        className={cn(
-          "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0",
-          avatarColor
+      <div className="relative shrink-0">
+        <div
+          className={cn(
+            "w-10 h-10 rounded-full flex items-center justify-center text-white text-xs font-semibold",
+            avatarColor
+          )}
+        >
+          {initials}
+        </div>
+        {channel && (
+          <div
+            className={cn(
+              "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center border border-[#161b22]",
+              channel === "website" ? "bg-violet-600" : "bg-emerald-600"
+            )}
+            title={channel === "website" ? "Website chat" : "WhatsApp"}
+          >
+            <ChannelIcon className="w-2.5 h-2.5 text-white" />
+          </div>
         )}
-      >
-        {initials}
       </div>
 
       <div className="flex-1 min-w-0">
