@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireTenant, isErrorResponse } from "@/lib/tenant";
+import {
+  requireTenant,
+  requireSuperAdmin,
+  isErrorResponse,
+} from "@/lib/tenant";
+
+// Fields any org user (member/admin) can edit
+const TENANT_FIELDS = [
+  "name",
+  "botName",
+  "greeting",
+  "quickReplies",
+  "brandColor",
+  "allowedOrigins",
+  "enabled",
+];
+// Fields only super-admins can edit
+const SUPER_ADMIN_FIELDS = ["systemPrompt"];
 
 export async function GET(
   req: NextRequest,
@@ -51,19 +68,28 @@ export async function PUT(
 
     const body = await req.json();
 
+    const isSuperAdmin = ctx.role === "superAdmin";
+    const allowed = isSuperAdmin
+      ? [...TENANT_FIELDS, ...SUPER_ADMIN_FIELDS]
+      : TENANT_FIELDS;
+
     const updateData: Record<string, unknown> = {};
-    const allowed = [
-      "name",
-      "botName",
-      "systemPrompt",
-      "greeting",
-      "quickReplies",
-      "brandColor",
-      "allowedOrigins",
-      "enabled",
-    ];
     for (const key of allowed) {
       if (key in body) updateData[key] = body[key];
+    }
+
+    // If the request attempted restricted fields we stripped, tell the client.
+    const attemptedRestricted = SUPER_ADMIN_FIELDS.filter((f) => f in body);
+    if (!isSuperAdmin && attemptedRestricted.length > 0) {
+      // Allow the rest of the update to still apply, but surface the denial.
+      if (Object.keys(updateData).length === 0) {
+        return NextResponse.json(
+          {
+            error: `Only super-admins can change: ${attemptedRestricted.join(", ")}`,
+          },
+          { status: 403 }
+        );
+      }
     }
 
     const site = await prisma.websiteConfig.update({
@@ -81,20 +107,20 @@ export async function PUT(
 }
 
 export async function DELETE(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await requireTenant(req);
+  // Only super-admins can delete websites.
+  const ctx = await requireSuperAdmin();
   if (isErrorResponse(ctx)) return ctx;
 
   try {
     const { id } = await params;
-
     const existing = await prisma.websiteConfig.findUnique({
       where: { id },
-      select: { organizationId: true },
+      select: { id: true },
     });
-    if (!existing || existing.organizationId !== ctx.organizationId) {
+    if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

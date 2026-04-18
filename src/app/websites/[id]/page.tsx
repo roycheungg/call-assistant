@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Save, Trash2, Copy, Check } from "lucide-react";
+import { ArrowLeft, Save, Trash2, Copy, Check, Lock } from "lucide-react";
 
 interface Site {
   id: string;
@@ -26,6 +27,9 @@ interface Site {
 export default function WebsiteEditPage() {
   const params = useParams();
   const router = useRouter();
+  const { data: session } = useSession();
+  const isSuperAdmin = session?.user?.role === "superAdmin";
+
   const [site, setSite] = useState<Site | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -55,19 +59,25 @@ export default function WebsiteEditPage() {
     if (!site) return;
     setSaving(true);
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body: Record<string, any> = {
+        name: site.name,
+        botName: site.botName,
+        greeting: site.greeting,
+        quickReplies: site.quickReplies,
+        brandColor: site.brandColor,
+        allowedOrigins: site.allowedOrigins,
+        enabled: site.enabled,
+      };
+      // Only super-admins are allowed to change the system prompt.
+      if (isSuperAdmin) {
+        body.systemPrompt = site.systemPrompt;
+      }
+
       const res = await fetch(`/api/websites/${site.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: site.name,
-          botName: site.botName,
-          systemPrompt: site.systemPrompt,
-          greeting: site.greeting,
-          quickReplies: site.quickReplies,
-          brandColor: site.brandColor,
-          allowedOrigins: site.allowedOrigins,
-          enabled: site.enabled,
-        }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error("Save failed");
     } catch (err) {
@@ -139,10 +149,12 @@ export default function WebsiteEditPage() {
         </div>
 
         <div className="flex gap-2">
-          <Button variant="outline" onClick={deleteSite}>
-            <Trash2 className="w-4 h-4 mr-2" />
-            Delete
-          </Button>
+          {isSuperAdmin && (
+            <Button variant="outline" onClick={deleteSite}>
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+          )}
           <Button onClick={save} disabled={saving}>
             <Save className="w-4 h-4 mr-2" />
             {saving ? "Saving..." : "Save"}
@@ -293,7 +305,12 @@ export default function WebsiteEditPage() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg flex items-center justify-between">
-            <span>System Prompt</span>
+            <span className="flex items-center gap-2">
+              System Prompt
+              {!isSuperAdmin && (
+                <Lock className="w-3.5 h-3.5 text-slate-500" />
+              )}
+            </span>
             <Badge variant="outline" className="text-[10px]">
               {site.systemPrompt.length} chars
             </Badge>
@@ -306,12 +323,25 @@ export default function WebsiteEditPage() {
               setSite({ ...site, systemPrompt: e.target.value })
             }
             rows={20}
-            className="font-mono text-xs"
+            readOnly={!isSuperAdmin}
+            className={`font-mono text-xs ${
+              !isSuperAdmin ? "opacity-70 cursor-not-allowed" : ""
+            }`}
           />
           <p className="text-xs text-muted-foreground mt-2">
-            Tip: Include a lead capture instruction like &quot;When the visitor
-            provides their name, email, and phone, append [LEAD:{"{"}&quot;name&quot;:...,&quot;email&quot;:...,&quot;phone&quot;:...{"}"}] at the
-            end of your message.&quot;
+            {isSuperAdmin ? (
+              <>
+                Tip: Include a lead capture instruction like &quot;When the
+                visitor provides their name, email, and phone, append [LEAD:
+                {"{"}&quot;name&quot;:...,&quot;email&quot;:...,&quot;phone&quot;:...{"}"}] at the end of your
+                message.&quot;
+              </>
+            ) : (
+              <>
+                The system prompt is managed by your DOAI account manager.
+                Contact support to request changes.
+              </>
+            )}
           </p>
         </CardContent>
       </Card>

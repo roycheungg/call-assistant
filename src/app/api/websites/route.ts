@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireTenant, isErrorResponse } from "@/lib/tenant";
+import {
+  requireTenant,
+  requireSuperAdmin,
+  isErrorResponse,
+} from "@/lib/tenant";
 
 export async function GET(req: NextRequest) {
   const ctx = await requireTenant(req);
@@ -25,12 +29,14 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const ctx = await requireTenant(req);
+  // Only super-admins can create new websites — they pick which org it belongs to.
+  const ctx = await requireSuperAdmin();
   if (isErrorResponse(ctx)) return ctx;
 
   try {
     const body = await req.json();
     const {
+      organizationId,
       siteId,
       name,
       botName,
@@ -41,9 +47,9 @@ export async function POST(req: NextRequest) {
       allowedOrigins,
     } = body;
 
-    if (!siteId || !name || !systemPrompt) {
+    if (!organizationId || !siteId || !name || !systemPrompt) {
       return NextResponse.json(
-        { error: "siteId, name, systemPrompt required" },
+        { error: "organizationId, siteId, name, systemPrompt required" },
         { status: 400 }
       );
     }
@@ -55,9 +61,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const org = await prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { id: true },
+    });
+    if (!org) {
+      return NextResponse.json(
+        { error: "organization not found" },
+        { status: 404 }
+      );
+    }
+
     const site = await prisma.websiteConfig.create({
       data: {
-        organizationId: ctx.organizationId,
+        organizationId,
         siteId,
         name,
         botName: botName || "Assistant",

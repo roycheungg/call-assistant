@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -36,6 +37,9 @@ import {
   ExternalLink,
   Phone,
   Users as UsersIcon,
+  Globe,
+  Copy,
+  Check,
 } from "lucide-react";
 
 interface Org {
@@ -95,6 +99,28 @@ export default function OrganizationDetailPage() {
   } | null>(null);
   const [copiedPw, setCopiedPw] = useState(false);
 
+  // Websites
+  type WebsiteRow = {
+    id: string;
+    siteId: string;
+    name: string;
+    botName: string;
+    enabled: boolean;
+    _count: { conversations: number };
+  };
+  const [websites, setWebsites] = useState<WebsiteRow[]>([]);
+  const [websiteDialog, setWebsiteDialog] = useState(false);
+  const [creatingSite, setCreatingSite] = useState(false);
+  const [copiedSiteId, setCopiedSiteId] = useState<string | null>(null);
+  const [websiteForm, setWebsiteForm] = useState({
+    siteId: "",
+    name: "",
+    botName: "Assistant",
+    systemPrompt: "",
+    greeting: "",
+    allowedOrigins: "",
+  });
+
   async function load() {
     setLoading(true);
     try {
@@ -102,9 +128,84 @@ export default function OrganizationDetailPage() {
       if (!res.ok) throw new Error("Not found");
       const data = await res.json();
       setOrg(data);
+      await loadWebsites(data.id);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadWebsites(organizationId: string) {
+    try {
+      const res = await fetch(`/api/websites?asOrg=${organizationId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setWebsites(data.sites || []);
+    } catch (err) {
+      console.error("Failed to load websites:", err);
+    }
+  }
+
+  async function createWebsite() {
+    if (!org) return;
+    if (!websiteForm.siteId || !websiteForm.name || !websiteForm.systemPrompt) {
+      alert("Site ID, Display Name and System Prompt are required");
+      return;
+    }
+    setCreatingSite(true);
+    try {
+      const res = await fetch("/api/websites", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          organizationId: org.id,
+          siteId: websiteForm.siteId,
+          name: websiteForm.name,
+          botName: websiteForm.botName || "Assistant",
+          systemPrompt: websiteForm.systemPrompt,
+          greeting: websiteForm.greeting || null,
+          allowedOrigins: websiteForm.allowedOrigins
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "Failed to create website");
+        return;
+      }
+      setWebsiteDialog(false);
+      setWebsiteForm({
+        siteId: "",
+        name: "",
+        botName: "Assistant",
+        systemPrompt: "",
+        greeting: "",
+        allowedOrigins: "",
+      });
+      await loadWebsites(org.id);
+    } finally {
+      setCreatingSite(false);
+    }
+  }
+
+  async function deleteWebsite(id: string, name: string) {
+    if (!org) return;
+    if (!confirm(`Delete website "${name}"? This cannot be undone.`)) return;
+    const res = await fetch(`/api/websites/${id}`, { method: "DELETE" });
+    if (!res.ok) {
+      alert("Failed to delete website");
+      return;
+    }
+    await loadWebsites(org.id);
+  }
+
+  function copyEmbedForSite(siteId: string) {
+    const origin = window.location.origin;
+    const snippet = `<script src="${origin}/widget.js" data-site-id="${siteId}" async></script>`;
+    navigator.clipboard.writeText(snippet);
+    setCopiedSiteId(siteId);
+    setTimeout(() => setCopiedSiteId(null), 2000);
   }
 
   useEffect(() => {
@@ -377,6 +478,99 @@ export default function OrganizationDetailPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="text-lg flex items-center gap-2">
+            <Globe className="w-5 h-5" />
+            Websites
+          </CardTitle>
+          <Button size="sm" onClick={() => setWebsiteDialog(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Website
+          </Button>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Site ID</TableHead>
+                <TableHead>Bot</TableHead>
+                <TableHead>Conversations</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {websites.length === 0 ? (
+                <TableRow>
+                  <TableCell
+                    colSpan={6}
+                    className="text-center py-8 text-muted-foreground text-sm"
+                  >
+                    No websites configured for this org yet
+                  </TableCell>
+                </TableRow>
+              ) : (
+                websites.map((w) => (
+                  <TableRow key={w.id}>
+                    <TableCell className="font-medium">
+                      <button
+                        onClick={() =>
+                          router.push(`/websites/${w.id}?asOrg=${org.id}`)
+                        }
+                        className="hover:underline text-left"
+                      >
+                        {w.name}
+                      </button>
+                    </TableCell>
+                    <TableCell>
+                      <code className="text-xs bg-white/5 px-1.5 py-0.5 rounded">
+                        {w.siteId}
+                      </code>
+                    </TableCell>
+                    <TableCell className="text-sm">{w.botName}</TableCell>
+                    <TableCell className="text-sm">
+                      {w._count.conversations}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={w.enabled ? "default" : "secondary"}
+                        className="text-[10px]"
+                      >
+                        {w.enabled ? "enabled" : "disabled"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="flex items-center gap-1 justify-end pr-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => copyEmbedForSite(w.siteId)}
+                        title="Copy embed code"
+                      >
+                        {copiedSiteId === w.siteId ? (
+                          <Check className="w-4 h-4 text-emerald-500" />
+                        ) : (
+                          <Copy className="w-4 h-4" />
+                        )}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => deleteWebsite(w.id, w.name)}
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle className="text-lg flex items-center gap-2">
             <UsersIcon className="w-5 h-5" />
             Users
           </CardTitle>
@@ -500,6 +694,123 @@ export default function OrganizationDetailPage() {
             </Button>
             <Button onClick={addPhone} disabled={!phoneForm.number}>
               Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Website dialog */}
+      <Dialog open={websiteDialog} onOpenChange={setWebsiteDialog}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Website</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs font-medium">
+                Site ID (unique across all orgs)
+              </label>
+              <Input
+                value={websiteForm.siteId}
+                onChange={(e) =>
+                  setWebsiteForm({
+                    ...websiteForm,
+                    siteId: e.target.value.toLowerCase(),
+                  })
+                }
+                placeholder="client-abc"
+                className="mt-1"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Lowercase letters, numbers, dashes only. Appears in the embed
+                tag.
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-medium">Display Name</label>
+              <Input
+                value={websiteForm.name}
+                onChange={(e) =>
+                  setWebsiteForm({ ...websiteForm, name: e.target.value })
+                }
+                placeholder="Client ABC"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">Bot Name</label>
+              <Input
+                value={websiteForm.botName}
+                onChange={(e) =>
+                  setWebsiteForm({ ...websiteForm, botName: e.target.value })
+                }
+                placeholder="Assistant"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">
+                Greeting (first message shown)
+              </label>
+              <Input
+                value={websiteForm.greeting}
+                onChange={(e) =>
+                  setWebsiteForm({ ...websiteForm, greeting: e.target.value })
+                }
+                placeholder="Hi! How can I help?"
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">System Prompt</label>
+              <Textarea
+                value={websiteForm.systemPrompt}
+                onChange={(e) =>
+                  setWebsiteForm({
+                    ...websiteForm,
+                    systemPrompt: e.target.value,
+                  })
+                }
+                rows={6}
+                className="mt-1 font-mono text-xs"
+                placeholder="You are a helpful assistant for..."
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">
+                Allowed Origins (one per line)
+              </label>
+              <Textarea
+                value={websiteForm.allowedOrigins}
+                onChange={(e) =>
+                  setWebsiteForm({
+                    ...websiteForm,
+                    allowedOrigins: e.target.value,
+                  })
+                }
+                rows={3}
+                className="mt-1"
+                placeholder="https://client.com&#10;https://www.client.com"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                Leave empty to allow any origin. Supports *.example.com.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWebsiteDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={createWebsite}
+              disabled={
+                creatingSite ||
+                !websiteForm.siteId ||
+                !websiteForm.name ||
+                !websiteForm.systemPrompt
+              }
+            >
+              {creatingSite ? "Creating..." : "Create"}
             </Button>
           </DialogFooter>
         </DialogContent>

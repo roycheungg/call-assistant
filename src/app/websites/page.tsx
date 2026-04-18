@@ -13,17 +13,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Globe, Plus, Copy, Check } from "lucide-react";
+import { Globe, Copy, Check } from "lucide-react";
 import { format } from "date-fns";
 
 interface Site {
@@ -41,18 +31,7 @@ export default function WebsitesPage() {
   const router = useRouter();
   const [sites, setSites] = useState<Site[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  const [form, setForm] = useState({
-    siteId: "",
-    name: "",
-    botName: "Assistant",
-    systemPrompt: "",
-    greeting: "",
-    allowedOrigins: "",
-  });
 
   async function load() {
     setLoading(true);
@@ -71,46 +50,6 @@ export default function WebsitesPage() {
     load();
   }, []);
 
-  async function createSite() {
-    setCreating(true);
-    try {
-      const res = await fetch("/api/websites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          siteId: form.siteId,
-          name: form.name,
-          botName: form.botName,
-          systemPrompt: form.systemPrompt,
-          greeting: form.greeting || null,
-          allowedOrigins: form.allowedOrigins
-            .split(",")
-            .map((o) => o.trim())
-            .filter(Boolean),
-        }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        alert(err.error || "Failed to create site");
-        return;
-      }
-
-      setDialogOpen(false);
-      setForm({
-        siteId: "",
-        name: "",
-        botName: "Assistant",
-        systemPrompt: "",
-        greeting: "",
-        allowedOrigins: "",
-      });
-      await load();
-    } finally {
-      setCreating(false);
-    }
-  }
-
   function copyEmbed(siteId: string) {
     const origin = window.location.origin;
     const snippet = `<script src="${origin}/widget.js" data-site-id="${siteId}" async></script>`;
@@ -121,17 +60,11 @@ export default function WebsitesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Websites</h1>
-          <p className="text-muted-foreground mt-1">
-            Manage embeddable chatbots for client websites
-          </p>
-        </div>
-        <Button onClick={() => setDialogOpen(true)}>
-          <Plus className="w-4 h-4 mr-2" />
-          Add Website
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold">Websites</h1>
+        <p className="text-muted-foreground mt-1">
+          Embeddable chatbots for your websites
+        </p>
       </div>
 
       <Card>
@@ -159,9 +92,12 @@ export default function WebsitesPage() {
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-12">
                     <Globe className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-                    <p className="text-muted-foreground">No websites yet</p>
+                    <p className="text-muted-foreground">
+                      No chatbot set up yet
+                    </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Click &quot;Add Website&quot; to create your first embeddable chatbot
+                      Contact your account manager at DOAI to configure a
+                      chatbot for your website.
                     </p>
                   </TableCell>
                 </TableRow>
@@ -217,118 +153,6 @@ export default function WebsitesPage() {
           </Table>
         </CardContent>
       </Card>
-
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add Website</DialogTitle>
-            <DialogDescription>
-              Create a new embeddable chatbot configuration
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-xs font-medium text-slate-400">
-                Site ID (unique identifier)
-              </label>
-              <Input
-                value={form.siteId}
-                onChange={(e) =>
-                  setForm({ ...form, siteId: e.target.value.toLowerCase() })
-                }
-                placeholder="client-abc"
-                className="mt-1"
-              />
-              <p className="text-[10px] text-slate-500 mt-1">
-                Lowercase letters, numbers, dashes only
-              </p>
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-slate-400">
-                Display Name
-              </label>
-              <Input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Client ABC"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-slate-400">
-                Bot Name
-              </label>
-              <Input
-                value={form.botName}
-                onChange={(e) => setForm({ ...form, botName: e.target.value })}
-                placeholder="Assistant"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-slate-400">
-                Greeting (first message shown to visitors)
-              </label>
-              <Input
-                value={form.greeting}
-                onChange={(e) => setForm({ ...form, greeting: e.target.value })}
-                placeholder="Hi! How can I help?"
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-slate-400">
-                System Prompt
-              </label>
-              <Textarea
-                value={form.systemPrompt}
-                onChange={(e) =>
-                  setForm({ ...form, systemPrompt: e.target.value })
-                }
-                placeholder="You are a helpful assistant for..."
-                rows={6}
-                className="mt-1"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-medium text-slate-400">
-                Allowed Origins (comma-separated)
-              </label>
-              <Input
-                value={form.allowedOrigins}
-                onChange={(e) =>
-                  setForm({ ...form, allowedOrigins: e.target.value })
-                }
-                placeholder="https://client.com, https://www.client.com"
-                className="mt-1"
-              />
-              <p className="text-[10px] text-slate-500 mt-1">
-                Leave empty to allow all origins. Supports *.example.com
-              </p>
-            </div>
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={createSite}
-              disabled={
-                creating || !form.siteId || !form.name || !form.systemPrompt
-              }
-            >
-              {creating ? "Creating..." : "Create"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
