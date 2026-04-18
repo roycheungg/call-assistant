@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Lock, User as UserIcon, LogOut } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 export default function AccountSettingsPage() {
   const { data: session } = useSession();
@@ -37,7 +38,7 @@ export default function AccountSettingsPage() {
 
     setSaving(true);
     try {
-      const res = await fetch("/api/account/password", {
+      const res = await apiFetch("/api/account/password", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ currentPassword, newPassword }),

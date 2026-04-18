@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Save, Trash2, Copy, Check } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Site {
   id: string;
@@ -38,7 +39,7 @@ export default function WebsiteEditPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/websites/${params.id}`);
+        const res = await apiFetch(`/api/websites/${params.id}`);
         if (!res.ok) throw new Error("Not found");
         const data = await res.json();
         setSite({
@@ -74,7 +75,7 @@ export default function WebsiteEditPage() {
         body.systemPrompt = site.systemPrompt;
       }
 
-      const res = await fetch(`/api/websites/${site.id}`, {
+      const res = await apiFetch(`/api/websites/${site.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -92,7 +93,7 @@ export default function WebsiteEditPage() {
     if (!site) return;
     if (!confirm(`Delete website "${site.name}"? This cannot be undone.`))
       return;
-    await fetch(`/api/websites/${site.id}`, { method: "DELETE" });
+    await apiFetch(`/api/websites/${site.id}`, { method: "DELETE" });
     router.push("/websites");
   }
 

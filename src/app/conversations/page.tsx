@@ -14,6 +14,7 @@ import { cn } from "@/lib/utils";
 import { ConversationListItem } from "@/components/conversations/conversation-list-item";
 import { ContactPanel } from "@/components/conversations/contact-panel";
 import { MessageBubble } from "@/components/conversations/message-bubble";
+import { apiFetch } from "@/lib/api-fetch";
 
 type Channel = "whatsapp" | "website";
 
@@ -105,7 +106,7 @@ export default function ConversationsPage() {
       if (filter !== "all") params.set("filter", filter);
       if (channelFilter !== "all") params.set("channel", channelFilter);
       if (search) params.set("search", search);
-      const res = await fetch(`/api/conversations?${params}`);
+      const res = await apiFetch(`/api/conversations?${params}`);
       const data = await res.json();
       setConversations(data.conversations || []);
     } catch (error) {
@@ -125,13 +126,13 @@ export default function ConversationsPage() {
     setMobileView("chat");
     setLoadingDetail(true);
     try {
-      const res = await fetch(`/api/conversations/${id}?channel=${channel}`);
+      const res = await apiFetch(`/api/conversations/${id}?channel=${channel}`);
       if (!res.ok) throw new Error("Not found");
       const data: ConversationDetail = await res.json();
       setActiveConversation(data);
 
       if (!data.isRead) {
-        fetch(`/api/conversations/${id}/read?channel=${channel}`, {
+        apiFetch(`/api/conversations/${id}/read?channel=${channel}`, {
           method: "PATCH",
         });
         setConversations((prev) =>
@@ -151,7 +152,7 @@ export default function ConversationsPage() {
 
   async function toggleStar() {
     if (!activeConversation) return;
-    const res = await fetch(
+    const res = await apiFetch(
       `/api/conversations/${activeConversation.id}/star?channel=${activeConversation.channel}`,
       { method: "PATCH" }
     );

@@ -25,6 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { apiFetch } from "@/lib/api-fetch";
 
 type FeatureKey = "voice" | "chatbot" | "whatsapp" | null;
 
@@ -92,13 +93,11 @@ export function Sidebar() {
       .catch(() => {});
   }, [isSuperAdmin]);
 
-  // Load feature flags for the current org (respects ?asOrg for super-admins)
+  // Load feature flags for the current org (respects ?asOrg for super-admins
+  // automatically via apiFetch)
   useEffect(() => {
     if (!session?.user?.id) return;
-    const url = asOrg
-      ? `/api/settings?asOrg=${encodeURIComponent(asOrg)}`
-      : "/api/settings";
-    fetch(url)
+    apiFetch("/api/settings")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!d?.settings) return;

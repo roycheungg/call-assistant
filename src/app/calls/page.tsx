@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Phone, ChevronLeft, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Call {
   id: string;
@@ -37,7 +38,7 @@ export default function CallsPage() {
     async function fetchCalls() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/calls?page=${page}&limit=20`);
+        const res = await apiFetch(`/api/calls?page=${page}&limit=20`);
         const data = await res.json();
         setCalls(data.calls || []);
         setTotalPages(data.totalPages || 1);

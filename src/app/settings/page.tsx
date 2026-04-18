@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Save, Plus, Trash2, Building2, Users, Clock } from "lucide-react";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface TeamMember {
   name: string;
@@ -37,7 +38,7 @@ export default function SettingsPage() {
   useEffect(() => {
     async function fetchSettings() {
       try {
-        const res = await fetch("/api/settings");
+        const res = await apiFetch("/api/settings");
         const data = await res.json();
         setSettings(data.settings);
       } catch (error) {
@@ -53,7 +54,7 @@ export default function SettingsPage() {
     if (!settings) return;
     setSaving(true);
     try {
-      await fetch("/api/settings", {
+      await apiFetch("/api/settings", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(settings),

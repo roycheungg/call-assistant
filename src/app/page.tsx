@@ -17,6 +17,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { format } from "date-fns";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Stats {
   totalCalls: number;
@@ -66,8 +67,8 @@ export default function DashboardPage() {
     async function fetchData() {
       try {
         const [statsRes, callbacksRes] = await Promise.all([
-          fetch("/api/stats"),
-          fetch("/api/callbacks?status=pending"),
+          apiFetch("/api/stats"),
+          apiFetch("/api/callbacks?status=pending"),
         ]);
         const statsData = await statsRes.json();
         const callbacksData = await callbacksRes.json();

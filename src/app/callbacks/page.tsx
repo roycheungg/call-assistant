@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { CalendarClock, Check, X } from "lucide-react";
 import { format } from "date-fns";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Callback {
   id: string;
@@ -36,7 +37,7 @@ export default function CallbacksPage() {
   async function fetchCallbacks() {
     setLoading(true);
     try {
-      const res = await fetch(`/api/callbacks?status=${filter}`);
+      const res = await apiFetch(`/api/callbacks?status=${filter}`);
       const data = await res.json();
       setCallbacks(data.callbacks || []);
     } catch (error) {
@@ -48,7 +49,7 @@ export default function CallbacksPage() {
 
   async function updateStatus(id: string, status: string) {
     try {
-      await fetch("/api/callbacks", {
+      await apiFetch("/api/callbacks", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, status }),

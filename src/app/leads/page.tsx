@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Users } from "lucide-react";
 import { format } from "date-fns";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Lead {
   id: string;
@@ -42,7 +43,7 @@ export default function LeadsPage() {
   useEffect(() => {
     async function fetchLeads() {
       try {
-        const res = await fetch("/api/leads");
+        const res = await apiFetch("/api/leads");
         const data = await res.json();
         setLeads(data.leads || []);
       } catch (error) {

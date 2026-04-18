@@ -15,6 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Globe, Copy, Check } from "lucide-react";
 import { format } from "date-fns";
+import { apiFetch } from "@/lib/api-fetch";
 
 interface Site {
   id: string;
@@ -36,7 +37,7 @@ export default function WebsitesPage() {
   async function load() {
     setLoading(true);
     try {
-      const res = await fetch("/api/websites");
+      const res = await apiFetch("/api/websites");
       const data = await res.json();
       setSites(data.sites || []);
     } catch (err) {
