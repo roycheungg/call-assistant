@@ -22,7 +22,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -117,7 +116,7 @@ export function Sidebar() {
                 </span>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-56">
-                <DropdownMenuLabel>Organizations</DropdownMenuLabel>
+                <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground">Organizations</div>
                 <DropdownMenuSeparator />
                 {orgs.map((o) => (
                   <DropdownMenuItem
@@ -187,12 +186,10 @@ export function Sidebar() {
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent side="top" align="start" className="w-56">
-              <DropdownMenuLabel className="text-xs">
-                {user.name || user.email}
-                <p className="text-[10px] text-slate-500 font-normal">
-                  {user.role}
-                </p>
-              </DropdownMenuLabel>
+              <div className="px-2 py-1.5 text-xs">
+                <p className="font-medium">{user.name || user.email}</p>
+                <p className="text-[10px] text-slate-500">{user.role}</p>
+              </div>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => (window.location.href = "/settings/account")}>
                 <Settings className="w-4 h-4 mr-2" />
