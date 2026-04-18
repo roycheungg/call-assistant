@@ -10,6 +10,17 @@ const DEFAULT_SETTINGS = {
   operatingHours: { start: "09:00", end: "17:00", timezone: "Europe/London", days: [1, 2, 3, 4, 5] },
 };
 
+// Fields only super-admins can change. Non-super-admins attempting to set
+// these have them silently stripped from the update payload.
+const SUPER_ADMIN_ONLY_FIELDS = [
+  "whatsappSystemPrompt",
+  "whatsappEnabled",
+  "chatbotEnabled",
+  "voiceEnabled",
+  "vapiAssistantId",
+  "vapiPhoneNumberId",
+];
+
 export async function GET(req: NextRequest) {
   const ctx = await requireTenant(req);
   if (isErrorResponse(ctx)) return ctx;
@@ -48,22 +59,32 @@ export async function PUT(req: NextRequest) {
   if (isErrorResponse(ctx)) return ctx;
 
   try {
-    const data = await req.json();
+    const raw = await req.json();
 
-    if (!data || typeof data !== "object") {
+    if (!raw || typeof raw !== "object") {
       return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
     }
 
-    // Prevent clients from changing their own organizationId
+    // Never allow changing the row id / org link from the client.
+    const data: Record<string, unknown> = { ...raw };
     delete data.id;
     delete data.organizationId;
+
+    // Strip super-admin-only fields unless the caller is a super-admin.
+    if (ctx.role !== "superAdmin") {
+      for (const f of SUPER_ADMIN_ONLY_FIELDS) {
+        if (f in data) delete data[f];
+      }
+    }
 
     const settings = await prisma.organizationSettings.upsert({
       where: { organizationId: ctx.organizationId },
       update: data,
       create: {
         organizationId: ctx.organizationId,
-        businessName: data.businessName || DEFAULT_SETTINGS.businessName,
+        businessName:
+          (data.businessName as string | undefined) ||
+          DEFAULT_SETTINGS.businessName,
         ...data,
       },
     });

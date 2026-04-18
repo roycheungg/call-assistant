@@ -104,6 +104,8 @@ model OrganizationSettings {
   vapiPhoneNumberId    String?
   whatsappSystemPrompt String?
   whatsappEnabled      Boolean  @default(false)
+  chatbotEnabled       Boolean  @default(false)
+  voiceEnabled         Boolean  @default(false)
   updatedAt            DateTime @updatedAt
 
   @@map("ca_organization_settings")

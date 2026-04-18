@@ -125,6 +125,21 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const orgSettings = await prisma.organizationSettings.findUnique({
+      where: { organizationId },
+      select: { voiceEnabled: true },
+    });
+    if (!orgSettings?.voiceEnabled) {
+      console.log(
+        "[VAPI] voiceEnabled=false for org, rejecting function call:",
+        organizationId
+      );
+      return NextResponse.json(
+        { results: [{ result: JSON.stringify({ error: "Voice agent disabled" }) }] },
+        { status: 200 }
+      );
+    }
+
     let result: unknown;
 
     switch (name) {

@@ -51,6 +51,12 @@ interface Org {
   enabled: boolean;
   settings: {
     businessName: string;
+    chatbotEnabled: boolean;
+    whatsappEnabled: boolean;
+    voiceEnabled: boolean;
+    whatsappSystemPrompt: string | null;
+    vapiAssistantId: string | null;
+    vapiPhoneNumberId: string | null;
   } | null;
   users: Array<{
     id: string;
@@ -112,6 +118,9 @@ export default function OrganizationDetailPage() {
   const [websiteDialog, setWebsiteDialog] = useState(false);
   const [creatingSite, setCreatingSite] = useState(false);
   const [copiedSiteId, setCopiedSiteId] = useState<string | null>(null);
+
+  // Features & prompts (super-admin-only edits to this org's settings)
+  const [featuresSaving, setFeaturesSaving] = useState(false);
   const [websiteForm, setWebsiteForm] = useState({
     siteId: "",
     name: "",
@@ -299,6 +308,44 @@ export default function OrganizationDetailPage() {
     setUserForm((f) => ({ ...f, password: out }));
   }
 
+  async function saveFeatures() {
+    if (!org?.settings) return;
+    setFeaturesSaving(true);
+    try {
+      const res = await fetch(`/api/settings?asOrg=${org.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chatbotEnabled: org.settings.chatbotEnabled,
+          whatsappEnabled: org.settings.whatsappEnabled,
+          voiceEnabled: org.settings.voiceEnabled,
+          whatsappSystemPrompt: org.settings.whatsappSystemPrompt,
+          vapiAssistantId: org.settings.vapiAssistantId,
+          vapiPhoneNumberId: org.settings.vapiPhoneNumberId,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || "Failed to save features");
+        return;
+      }
+      await load();
+    } finally {
+      setFeaturesSaving(false);
+    }
+  }
+
+  function updateFeature<K extends keyof NonNullable<Org["settings"]>>(
+    key: K,
+    value: NonNullable<Org["settings"]>[K]
+  ) {
+    if (!org?.settings) return;
+    setOrg({
+      ...org,
+      settings: { ...org.settings, [key]: value },
+    });
+  }
+
   async function deleteOrg() {
     if (!org) return;
     if (!confirm(`Delete "${org.name}" and all its data? This cannot be undone.`))
@@ -419,6 +466,121 @@ export default function OrganizationDetailPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Features & Prompts (super-admin only) */}
+      {org.settings && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="text-lg">Features & Prompts</CardTitle>
+            <Button
+              size="sm"
+              onClick={saveFeatures}
+              disabled={featuresSaving}
+            >
+              <Save className="w-4 h-4 mr-2" />
+              {featuresSaving ? "Saving..." : "Save"}
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">
+                Enabled features
+              </p>
+
+              <FeatureToggle
+                label="Website chatbot"
+                description="Embeddable widget on client websites"
+                enabled={org.settings.chatbotEnabled}
+                onToggle={(v) => updateFeature("chatbotEnabled", v)}
+              />
+              <FeatureToggle
+                label="WhatsApp"
+                description="Inbound WhatsApp Business messaging"
+                enabled={org.settings.whatsappEnabled}
+                onToggle={(v) => updateFeature("whatsappEnabled", v)}
+              />
+              <FeatureToggle
+                label="Voice agent (Vapi)"
+                description="Inbound phone calls handled by AI"
+                enabled={org.settings.voiceEnabled}
+                onToggle={(v) => updateFeature("voiceEnabled", v)}
+              />
+            </div>
+
+            <div className="border-t border-white/10 pt-5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                WhatsApp system prompt
+              </label>
+              <Textarea
+                value={org.settings.whatsappSystemPrompt || ""}
+                onChange={(e) =>
+                  updateFeature(
+                    "whatsappSystemPrompt",
+                    e.target.value || null
+                  )
+                }
+                rows={6}
+                placeholder="Leave empty to auto-generate from business name + services + hours."
+                className="mt-1 font-mono text-xs"
+              />
+              <p className="text-[10px] text-slate-500 mt-1">
+                When empty, the WhatsApp bot auto-builds a prompt from this
+                org&apos;s business info.
+              </p>
+            </div>
+
+            <div className="border-t border-white/10 pt-5">
+              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                Voice agent (Vapi) prompt
+              </label>
+              <p className="text-sm text-slate-400 mt-1">
+                Vapi assistant prompts live in the Vapi dashboard. Edit there,
+                then paste the Assistant ID below so inbound calls route
+                correctly.
+              </p>
+              <a
+                href="https://dashboard.vapi.ai"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-400 hover:underline inline-flex items-center gap-1 mt-2"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Open Vapi dashboard
+              </a>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium">Assistant ID</label>
+                  <Input
+                    value={org.settings.vapiAssistantId || ""}
+                    onChange={(e) =>
+                      updateFeature(
+                        "vapiAssistantId",
+                        e.target.value || null
+                      )
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">
+                    Default Phone Number ID
+                  </label>
+                  <Input
+                    value={org.settings.vapiPhoneNumberId || ""}
+                    onChange={(e) =>
+                      updateFeature(
+                        "vapiPhoneNumberId",
+                        e.target.value || null
+                      )
+                    }
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -971,6 +1133,34 @@ export default function OrganizationDetailPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function FeatureToggle({
+  label,
+  description,
+  enabled,
+  onToggle,
+}: {
+  label: string;
+  description: string;
+  enabled: boolean;
+  onToggle: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        <p className="text-sm font-medium">{label}</p>
+        <p className="text-xs text-slate-500">{description}</p>
+      </div>
+      <Button
+        variant={enabled ? "default" : "outline"}
+        size="sm"
+        onClick={() => onToggle(!enabled)}
+      >
+        {enabled ? "Enabled" : "Disabled"}
+      </Button>
     </div>
   );
 }

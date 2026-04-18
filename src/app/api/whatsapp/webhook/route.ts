@@ -81,6 +81,19 @@ async function processWebhook(body: Record<string, unknown>) {
 
   const organizationId = phoneRecord.organizationId;
 
+  // Feature gate: org must have WhatsApp enabled
+  const orgSettings = await prisma.organizationSettings.findUnique({
+    where: { organizationId },
+    select: { whatsappEnabled: true },
+  });
+  if (!orgSettings?.whatsappEnabled) {
+    console.log(
+      "[WHATSAPP WEBHOOK] whatsappEnabled=false for org, ignoring:",
+      organizationId
+    );
+    return;
+  }
+
   const contacts = value.contacts as Array<Record<string, unknown>>;
   const contactProfile = contacts?.[0]?.profile as Record<string, unknown>;
   const contactName = (contactProfile?.name as string) || null;

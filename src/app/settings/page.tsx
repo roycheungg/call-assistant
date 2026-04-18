@@ -6,8 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Save, Plus, Trash2, Building2, Users, Clock, MessageCircle } from "lucide-react";
+import { Save, Plus, Trash2, Building2, Users, Clock } from "lucide-react";
 
 interface TeamMember {
   name: string;
@@ -28,10 +27,6 @@ interface Settings {
   teamMembers: TeamMember[];
   operatingHours: { start: string; end: string; timezone: string; days: number[] };
   greetingMessage: string | null;
-  vapiAssistantId: string | null;
-  vapiPhoneNumberId: string | null;
-  whatsappSystemPrompt: string | null;
-  whatsappEnabled: boolean;
 }
 
 export default function SettingsPage() {
@@ -310,79 +305,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* WhatsApp Configuration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center gap-2">
-            <MessageCircle className="w-5 h-5" />
-            WhatsApp Configuration
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            <label className="text-sm font-medium">WhatsApp Chatbot Enabled</label>
-            <Button
-              variant={settings.whatsappEnabled ? "default" : "outline"}
-              size="sm"
-              onClick={() =>
-                setSettings({ ...settings, whatsappEnabled: !settings.whatsappEnabled })
-              }
-            >
-              {settings.whatsappEnabled ? "Enabled" : "Disabled"}
-            </Button>
-          </div>
-          <div>
-            <label className="text-sm font-medium">
-              Custom System Prompt (optional)
-            </label>
-            <Textarea
-              value={settings.whatsappSystemPrompt || ""}
-              onChange={(e) =>
-                setSettings({
-                  ...settings,
-                  whatsappSystemPrompt: e.target.value || null,
-                })
-              }
-              className="mt-1"
-              rows={5}
-              placeholder="Leave empty to auto-generate from your business info above. Or write a custom prompt to control the AI's personality and knowledge."
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              If left empty, the WhatsApp AI will use your business name, description, services, and operating hours to generate its responses.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Vapi Config */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Vapi Configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <label className="text-sm font-medium">Assistant ID</label>
-            <Input
-              value={settings.vapiAssistantId || ""}
-              onChange={(e) => setSettings({ ...settings, vapiAssistantId: e.target.value })}
-              className="mt-1"
-              placeholder="Enter your Vapi assistant ID"
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Phone Number ID</label>
-            <Input
-              value={settings.vapiPhoneNumberId || ""}
-              onChange={(e) => setSettings({ ...settings, vapiPhoneNumberId: e.target.value })}
-              className="mt-1"
-              placeholder="Enter your Vapi phone number ID"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Get these from your Vapi dashboard after creating an assistant and provisioning a phone number.
-          </p>
-        </CardContent>
-      </Card>
     </div>
   );
 }

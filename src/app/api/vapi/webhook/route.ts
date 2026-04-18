@@ -296,6 +296,19 @@ async function handleEndOfCallReport(message: any) {
     return;
   }
 
+  // Feature gate: org must have voice enabled
+  const orgSettings = await prisma.organizationSettings.findUnique({
+    where: { organizationId },
+    select: { voiceEnabled: true },
+  });
+  if (!orgSettings?.voiceEnabled) {
+    console.log(
+      "[VAPI WEBHOOK] voiceEnabled=false for org, ignoring call:",
+      organizationId
+    );
+    return;
+  }
+
   // Find or create lead (scoped to this org)
   let lead = null;
   if (phoneNumber !== "unknown") {

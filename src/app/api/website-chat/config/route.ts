@@ -34,6 +34,7 @@ export async function GET(req: NextRequest) {
         quickReplies: true,
         brandColor: true,
         enabled: true,
+        organizationId: true,
       },
     });
 
@@ -44,7 +45,22 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    return NextResponse.json(site, { headers });
+    // Feature gate: org must have chatbot enabled
+    const orgSettings = await prisma.organizationSettings.findUnique({
+      where: { organizationId: site.organizationId },
+      select: { chatbotEnabled: true },
+    });
+    if (!orgSettings?.chatbotEnabled) {
+      return NextResponse.json(
+        { error: "Site not found or disabled" },
+        { status: 404, headers }
+      );
+    }
+
+    // Strip organizationId before returning
+    const { organizationId: _omit, ...publicConfig } = site;
+    void _omit;
+    return NextResponse.json(publicConfig, { headers });
   } catch (error) {
     console.error("[WEBSITE CHAT CONFIG] GET error:", error);
     return NextResponse.json(

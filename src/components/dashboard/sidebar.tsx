@@ -26,13 +26,30 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-const navItems = [
+type FeatureKey = "voice" | "chatbot" | "whatsapp" | null;
+
+const navItems: Array<{
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  requires?: FeatureKey | FeatureKey[];
+}> = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/calls", label: "Call History", icon: Phone },
-  { href: "/conversations", label: "Conversations", icon: MessageCircle },
-  { href: "/websites", label: "Websites", icon: Globe },
+  { href: "/calls", label: "Call History", icon: Phone, requires: "voice" },
+  {
+    href: "/conversations",
+    label: "Conversations",
+    icon: MessageCircle,
+    requires: ["chatbot", "whatsapp"],
+  },
+  { href: "/websites", label: "Websites", icon: Globe, requires: "chatbot" },
   { href: "/leads", label: "Leads", icon: Users },
-  { href: "/callbacks", label: "Callbacks", icon: CalendarClock },
+  {
+    href: "/callbacks",
+    label: "Callbacks",
+    icon: CalendarClock,
+    requires: "voice",
+  },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -52,6 +69,12 @@ export function Sidebar() {
   const isSuperAdmin = session?.user?.role === "superAdmin";
   const user = session?.user;
 
+  const [features, setFeatures] = useState<{
+    chatbotEnabled: boolean;
+    whatsappEnabled: boolean;
+    voiceEnabled: boolean;
+  } | null>(null);
+
   // Super-admins: load all orgs for the switcher
   useEffect(() => {
     if (!isSuperAdmin) return;
@@ -68,6 +91,25 @@ export function Sidebar() {
       )
       .catch(() => {});
   }, [isSuperAdmin]);
+
+  // Load feature flags for the current org (respects ?asOrg for super-admins)
+  useEffect(() => {
+    if (!session?.user?.id) return;
+    const url = asOrg
+      ? `/api/settings?asOrg=${encodeURIComponent(asOrg)}`
+      : "/api/settings";
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d?.settings) return;
+        setFeatures({
+          chatbotEnabled: !!d.settings.chatbotEnabled,
+          whatsappEnabled: !!d.settings.whatsappEnabled,
+          voiceEnabled: !!d.settings.voiceEnabled,
+        });
+      })
+      .catch(() => {});
+  }, [session?.user?.id, asOrg]);
 
   const activeOrgId = asOrg || session?.user?.organizationId || null;
   const activeOrg = orgs.find((o) => o.id === activeOrgId);
@@ -137,24 +179,28 @@ export function Sidebar() {
       </div>
 
       <nav className="flex-1 p-3 space-y-0.5">
-        {navItems.map((item) => {
-          const isActive = pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              href={item.href + navSuffix}
-              className={cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-                isActive
-                  ? "bg-blue-600/15 text-blue-400 border border-blue-500/20"
-                  : "text-slate-400 hover:text-white hover:bg-white/5"
-              )}
-            >
-              <item.icon className={cn("w-4 h-4", isActive && "text-blue-400")} />
-              {item.label}
-            </Link>
-          );
-        })}
+        {navItems
+          .filter((item) => isNavVisible(item, features))
+          .map((item) => {
+            const isActive = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href + navSuffix}
+                className={cn(
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                  isActive
+                    ? "bg-blue-600/15 text-blue-400 border border-blue-500/20"
+                    : "text-slate-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <item.icon
+                  className={cn("w-4 h-4", isActive && "text-blue-400")}
+                />
+                {item.label}
+              </Link>
+            );
+          })}
 
         {isSuperAdmin && (
           <Link
@@ -212,4 +258,30 @@ export function Sidebar() {
       </div>
     </aside>
   );
+}
+
+type NavItem = {
+  href: string;
+  requires?: FeatureKey | FeatureKey[];
+};
+type Flags = {
+  chatbotEnabled: boolean;
+  whatsappEnabled: boolean;
+  voiceEnabled: boolean;
+};
+
+function isNavVisible(item: NavItem, features: Flags | null): boolean {
+  // No feature requirement → always visible
+  if (!item.requires) return true;
+  // Flags not loaded yet → show nothing feature-gated (avoids flash)
+  if (!features) return false;
+
+  const reqs = Array.isArray(item.requires) ? item.requires : [item.requires];
+  // Visible if ANY of the required features is enabled.
+  return reqs.some((r) => {
+    if (r === "chatbot") return features.chatbotEnabled;
+    if (r === "whatsapp") return features.whatsappEnabled;
+    if (r === "voice") return features.voiceEnabled;
+    return true;
+  });
 }

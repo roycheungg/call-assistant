@@ -43,7 +43,11 @@ async function main() {
     // 2. OrganizationSettings
     await prisma.organizationSettings.upsert({
       where: { organizationId: org.id },
-      update: {},
+      update: {
+        whatsappEnabled: true,
+        chatbotEnabled: true,
+        voiceEnabled: true,
+      },
       create: {
         id: DOAI_SETTINGS_ID,
         organizationId: org.id,
@@ -78,6 +82,9 @@ async function main() {
           timezone: "Europe/London",
           days: [1, 2, 3, 4, 5],
         },
+        whatsappEnabled: true,
+        chatbotEnabled: true,
+        voiceEnabled: true,
       },
     });
     console.log("  ✓ OrganizationSettings");

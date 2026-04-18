@@ -78,6 +78,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Feature gate: org must have chatbot enabled
+    const orgSettings = await prisma.organizationSettings.findUnique({
+      where: { organizationId: site.organizationId },
+      select: { chatbotEnabled: true },
+    });
+    if (!orgSettings?.chatbotEnabled) {
+      return new Response(
+        JSON.stringify({ error: "Chatbot is not enabled for this organization" }),
+        { status: 403, headers: { ...headers, "Content-Type": "application/json" } }
+      );
+    }
+
     // Verify CORS
     const allowedOrigins = site.allowedOrigins as string[];
     if (!checkCORS(origin, allowedOrigins)) {
