@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin, isErrorResponse } from "@/lib/tenant";
+import { hashPassword, validatePassword } from "@/lib/password";
 
 export async function GET(
   _req: NextRequest,
@@ -36,32 +37,55 @@ export async function POST(
   try {
     const { id: organizationId } = await params;
     const body = await req.json();
-    const { email, name, role } = body;
+    const { email, name, role, password } = body;
 
     if (!email) {
       return NextResponse.json({ error: "email is required" }, { status: 400 });
     }
 
-    // If user exists, reassign to this org
-    const existing = await prisma.user.findUnique({ where: { email } });
+    const normalizedEmail = String(email).toLowerCase().trim();
+
+    // If user exists, reassign to this org. Only set password if they don't already have one.
+    const existing = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
     if (existing) {
+      const updateData: Record<string, unknown> = {
+        organizationId,
+        name: existing.name || name || null,
+        role: role || existing.role,
+      };
+      if (password && !existing.passwordHash) {
+        const err = validatePassword(password);
+        if (err) return NextResponse.json({ error: err }, { status: 400 });
+        updateData.passwordHash = await hashPassword(password);
+      }
       const updated = await prisma.user.update({
-        where: { email },
-        data: {
-          organizationId,
-          name: existing.name || name || null,
-          role: role || existing.role,
-        },
+        where: { email: normalizedEmail },
+        data: updateData,
       });
       return NextResponse.json(updated);
     }
 
+    // New user — password required
+    if (!password) {
+      return NextResponse.json(
+        { error: "password is required for new users" },
+        { status: 400 }
+      );
+    }
+    const err = validatePassword(password);
+    if (err) return NextResponse.json({ error: err }, { status: 400 });
+
+    const passwordHash = await hashPassword(password);
+
     const user = await prisma.user.create({
       data: {
-        email,
+        email: normalizedEmail,
         name: name || null,
         organizationId,
         role: role || "member",
+        passwordHash,
       },
     });
 

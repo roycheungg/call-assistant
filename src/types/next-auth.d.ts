@@ -9,3 +9,11 @@ declare module "next-auth" {
     } & DefaultSession["user"];
   }
 }
+
+declare module "next-auth/jwt" {
+  interface JWT {
+    userId?: string;
+    organizationId?: string | null;
+    role?: "member" | "admin" | "superAdmin";
+  }
+}

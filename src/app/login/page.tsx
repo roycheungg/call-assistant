@@ -1,31 +1,44 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Bot, Mail } from "lucide-react";
+import { Bot, LogIn } from "lucide-react";
 
 function LoginForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
-  const error = searchParams.get("error");
+  const urlError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !password) return;
     setLoading(true);
-    try {
-      await signIn("nodemailer", { email: email.trim(), callbackUrl });
-    } catch (err) {
-      console.error("Sign in failed:", err);
+    setError(null);
+
+    const res = await signIn("credentials", {
+      email: email.trim(),
+      password,
+      redirect: false,
+    });
+
+    if (res?.error) {
+      setError("Invalid email or password");
       setLoading(false);
+      return;
     }
+
+    router.push(callbackUrl);
+    router.refresh();
   }
 
   return (
@@ -58,20 +71,32 @@ function LoginForm() {
               />
             </div>
 
-            {error && (
+            <div>
+              <label className="text-sm font-medium">Password</label>
+              <Input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={loading}
+                className="mt-1"
+              />
+            </div>
+
+            {(error || urlError) && (
               <p className="text-xs text-rose-400">
-                Something went wrong. Please try again.
+                {error || "Something went wrong. Please try again."}
               </p>
             )}
 
             <Button type="submit" disabled={loading} className="w-full">
-              <Mail className="w-4 h-4 mr-2" />
-              {loading ? "Sending..." : "Email me a login link"}
+              <LogIn className="w-4 h-4 mr-2" />
+              {loading ? "Signing in..." : "Sign in"}
             </Button>
           </form>
 
           <p className="text-xs text-muted-foreground mt-6 text-center">
-            We&apos;ll email you a one-time login link. No password required.
+            Don&apos;t have an account? Your administrator will invite you.
           </p>
         </CardContent>
       </Card>

@@ -40,6 +40,7 @@ model User {
   name           String?
   emailVerified  DateTime?
   image          String?
+  passwordHash   String?
   role           String    @default("member") // member, admin, superAdmin
   organizationId String?
   organization   Organization? @relation(fields: [organizationId], references: [id])

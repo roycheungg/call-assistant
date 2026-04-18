@@ -83,7 +83,17 @@ export default function OrganizationDetailPage() {
   });
 
   const [userDialog, setUserDialog] = useState(false);
-  const [userForm, setUserForm] = useState({ email: "", name: "", role: "member" });
+  const [userForm, setUserForm] = useState({
+    email: "",
+    name: "",
+    role: "member",
+    password: "",
+  });
+  const [userJustCreated, setUserJustCreated] = useState<{
+    email: string;
+    password: string;
+  } | null>(null);
+  const [copiedPw, setCopiedPw] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -155,6 +165,10 @@ export default function OrganizationDetailPage() {
 
   async function addUser() {
     if (!org) return;
+    if (!userForm.password || userForm.password.length < 8) {
+      alert("Password must be at least 8 characters");
+      return;
+    }
     const res = await fetch(`/api/admin/organizations/${org.id}/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -165,9 +179,23 @@ export default function OrganizationDetailPage() {
       alert(err.error || "Failed to add");
       return;
     }
-    setUserDialog(false);
-    setUserForm({ email: "", name: "", role: "member" });
+    // Show the password confirmation so the admin can share it
+    setUserJustCreated({
+      email: userForm.email,
+      password: userForm.password,
+    });
+    setUserForm({ email: "", name: "", role: "member", password: "" });
     await load();
+  }
+
+  function generatePassword() {
+    // 12-char random password using safe letters/digits
+    const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    let out = "";
+    const arr = new Uint32Array(12);
+    crypto.getRandomValues(arr);
+    for (let i = 0; i < 12; i++) out += chars[arr[i] % chars.length];
+    setUserForm((f) => ({ ...f, password: out }));
   }
 
   async function deleteOrg() {
@@ -518,13 +546,116 @@ export default function OrganizationDetailPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <label className="text-xs font-medium">
+                Initial password (min 8 chars)
+              </label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="text"
+                  value={userForm.password}
+                  onChange={(e) =>
+                    setUserForm({ ...userForm, password: e.target.value })
+                  }
+                  placeholder="Choose a password for them"
+                  className="flex-1"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={generatePassword}
+                >
+                  Generate
+                </Button>
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                You&apos;ll share this password with them directly. They can
+                change it after signing in.
+              </p>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUserDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={addUser} disabled={!userForm.email}>
+            <Button
+              onClick={addUser}
+              disabled={
+                !userForm.email ||
+                !userForm.password ||
+                userForm.password.length < 8
+              }
+            >
               Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Post-creation password confirmation */}
+      <Dialog
+        open={!!userJustCreated}
+        onOpenChange={(open) => {
+          if (!open) {
+            setUserJustCreated(null);
+            setCopiedPw(false);
+            setUserDialog(false);
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>User created</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-slate-300">
+              Share these credentials with{" "}
+              <strong>{userJustCreated?.email}</strong>. This password won&apos;t
+              be shown again.
+            </p>
+            <div>
+              <label className="text-xs font-medium">Email</label>
+              <Input
+                readOnly
+                value={userJustCreated?.email || ""}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium">Password</label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  readOnly
+                  value={userJustCreated?.password || ""}
+                  className="flex-1 font-mono"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    navigator.clipboard.writeText(
+                      userJustCreated?.password || ""
+                    );
+                    setCopiedPw(true);
+                    setTimeout(() => setCopiedPw(false), 2000);
+                  }}
+                >
+                  {copiedPw ? "Copied" : "Copy"}
+                </Button>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                setUserJustCreated(null);
+                setCopiedPw(false);
+                setUserDialog(false);
+              }}
+            >
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>

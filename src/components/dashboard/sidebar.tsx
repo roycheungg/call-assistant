@@ -194,6 +194,10 @@ export function Sidebar() {
                 </p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => (window.location.href = "/settings/account")}>
+                <Settings className="w-4 h-4 mr-2" />
+                Account settings
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Sign out

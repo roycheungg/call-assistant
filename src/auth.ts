@@ -1,46 +1,75 @@
 import NextAuth from "next-auth";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import Nodemailer from "next-auth/providers/nodemailer";
+import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const adapter = PrismaAdapter(prisma as any);
+import { verifyPassword } from "@/lib/password";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  adapter,
-  session: { strategy: "database" },
+  session: { strategy: "jwt" },
   providers: [
-    Nodemailer({
-      server: {
-        host: process.env.EMAIL_SERVER_HOST,
-        port: Number(process.env.EMAIL_SERVER_PORT || 587),
-        secure: Number(process.env.EMAIL_SERVER_PORT || 587) === 465,
-        auth: {
-          user: process.env.EMAIL_SERVER_USER,
-          pass: process.env.EMAIL_SERVER_PASSWORD,
-        },
+    Credentials({
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
       },
-      from: process.env.EMAIL_FROM,
+      async authorize(credentials) {
+        const email = String(credentials?.email || "")
+          .toLowerCase()
+          .trim();
+        const password = String(credentials?.password || "");
+        if (!email || !password) return null;
+
+        const user = await prisma.user.findUnique({
+          where: { email },
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            passwordHash: true,
+            organizationId: true,
+            role: true,
+          },
+        });
+        if (!user?.passwordHash) return null;
+
+        const ok = await verifyPassword(password, user.passwordHash);
+        if (!ok) return null;
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          organizationId: user.organizationId,
+          role: user.role,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any;
+      },
     }),
   ],
   callbacks: {
-    async session({ session, user }) {
-      const dbUser = await prisma.user.findUnique({
-        where: { id: user.id },
-        select: { organizationId: true, role: true },
-      });
+    async jwt({ token, user }) {
+      if (user) {
+        const u = user as typeof user & {
+          organizationId?: string | null;
+          role?: string;
+        };
+        token.userId = u.id;
+        token.organizationId = u.organizationId || null;
+        token.role = u.role || "member";
+      }
+      return token;
+    },
+    async session({ session, token }) {
       return {
         ...session,
         user: {
           ...session.user,
-          id: user.id,
-          organizationId: dbUser?.organizationId || null,
-          role: (dbUser?.role || "member") as "member" | "admin" | "superAdmin",
+          id: (token.userId as string) || session.user.id,
+          organizationId: (token.organizationId as string | null) || null,
+          role:
+            (token.role as "member" | "admin" | "superAdmin") || "member",
         },
       };
     },
   },
-  pages: {
-    signIn: "/login",
-    verifyRequest: "/login/check-email",
-  },
+  pages: { signIn: "/login" },
 });
