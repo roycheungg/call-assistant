@@ -186,7 +186,7 @@ export function Sidebar() {
                 </p>
               </div>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-56">
+            <DropdownMenuContent side="top" align="start" className="w-56">
               <DropdownMenuLabel className="text-xs">
                 {user.name || user.email}
                 <p className="text-[10px] text-slate-500 font-normal">
