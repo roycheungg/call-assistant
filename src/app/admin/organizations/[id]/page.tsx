@@ -57,6 +57,8 @@ interface Org {
     whatsappSystemPrompt: string | null;
     vapiAssistantId: string | null;
     vapiPhoneNumberId: string | null;
+    calComApiKey: string | null;
+    calComEventTypeId: string | null;
   } | null;
   users: Array<{
     id: string;
@@ -575,6 +577,63 @@ export default function OrganizationDetailPage() {
                     }
                     className="mt-1"
                   />
+                </div>
+              </div>
+
+              {/* Cal.com integration — books an event when the voice agent
+                  creates a callback. Optional; leave blank to skip. */}
+              <div className="mt-4 pt-4 border-t border-slate-800">
+                <label className="text-sm font-medium">
+                  Cal.com booking (optional)
+                </label>
+                <p className="text-xs text-muted-foreground mt-1">
+                  When both values are set, callbacks booked via the voice
+                  agent will also create a Cal.com event. Leave blank to
+                  skip — callbacks will still be recorded in the CRM.
+                </p>
+                <a
+                  href="https://app.cal.com/settings/developer/api-keys"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-xs text-blue-400 hover:underline inline-flex items-center gap-1 mt-2"
+                >
+                  <ExternalLink className="w-3 h-3" />
+                  Get a Cal.com API key
+                </a>
+                <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-medium">
+                      Cal.com API key
+                    </label>
+                    <Input
+                      type="password"
+                      placeholder="cal_live_..."
+                      value={org.settings.calComApiKey || ""}
+                      onChange={(e) =>
+                        updateFeature(
+                          "calComApiKey",
+                          e.target.value || null
+                        )
+                      }
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium">
+                      Event Type ID
+                    </label>
+                    <Input
+                      placeholder="e.g. 12345"
+                      value={org.settings.calComEventTypeId || ""}
+                      onChange={(e) =>
+                        updateFeature(
+                          "calComEventTypeId",
+                          e.target.value || null
+                        )
+                      }
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

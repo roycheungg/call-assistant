@@ -16,6 +16,8 @@ const SUPER_ADMIN_ONLY_FIELDS = [
   "voiceEnabled",
   "vapiAssistantId",
   "vapiPhoneNumberId",
+  "calComApiKey",
+  "calComEventTypeId",
 ];
 
 export async function GET(req: NextRequest) {

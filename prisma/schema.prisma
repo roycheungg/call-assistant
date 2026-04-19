@@ -102,6 +102,10 @@ model OrganizationSettings {
   whatsappEnabled      Boolean  @default(false)
   chatbotEnabled       Boolean  @default(false)
   voiceEnabled         Boolean  @default(false)
+  // Cal.com v2 integration (opt-in). When both are set, callbacks created
+  // via the Vapi function call will also be booked as Cal.com events.
+  calComApiKey         String?
+  calComEventTypeId    String?
   updatedAt            DateTime @updatedAt
 
   @@map("ca_organization_settings")
@@ -188,7 +192,11 @@ model Callback {
   lead            Lead     @relation(fields: [leadId], references: [id])
   assignedTo      String
   scheduledAt     DateTime
-  status          String   @default("pending")
+  status          String   @default("pending") // pending | completed | cancelled
+  // Outcome captured when operator marks the callback complete.
+  // One of: converted | no_answer | not_interested | follow_up | other
+  outcome         String?
+  completedAt     DateTime?
   notes           String?
   calendarEventId String?
   createdAt       DateTime @default(now())
