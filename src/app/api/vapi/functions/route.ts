@@ -156,7 +156,7 @@ export async function POST(req: NextRequest) {
         });
         break;
       case "check_availability":
-        result = await handleCheckAvailability(organizationId, parameters as {
+        result = await handleCheckAvailability(parameters as {
           date: string; teamMember?: string;
         });
         break;
@@ -276,16 +276,11 @@ async function handleBookCallback(
     lead.name || lead.phone,
     lead.phone,
     teamMember,
-    notes,
-    lead.email,
-    organizationId
+    notes
   );
 
   if (!booking.success) {
     return { success: false, message: booking.error || "Failed to book callback" };
-  }
-  if (booking.warning) {
-    console.warn("[VAPI FUNCTIONS] bookCallback warning:", booking.warning);
   }
 
   await prisma.callback.create({
@@ -311,11 +306,8 @@ async function handleBookCallback(
   };
 }
 
-async function handleCheckAvailability(
-  organizationId: string,
-  params: { date: string; teamMember?: string }
-) {
-  const slots = await getAvailableSlots(params.date, params.teamMember, organizationId);
+async function handleCheckAvailability(params: { date: string; teamMember?: string }) {
+  const slots = await getAvailableSlots(params.date, params.teamMember);
   const available = slots.filter((s) => s.available);
 
   if (available.length === 0) {
