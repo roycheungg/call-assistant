@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireSuperAdmin, isErrorResponse } from "@/lib/tenant";
 import { hashPassword, validatePassword } from "@/lib/password";
+import { parsePagination } from "@/lib/pagination";
 
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const ctx = await requireSuperAdmin();
@@ -12,12 +13,19 @@ export async function GET(
 
   try {
     const { id: organizationId } = await params;
-    const users = await prisma.user.findMany({
-      where: { organizationId },
-      select: { id: true, email: true, name: true, role: true, createdAt: true },
-      orderBy: { createdAt: "desc" },
-    });
-    return NextResponse.json({ users });
+    const { take, skip } = parsePagination(new URL(req.url).searchParams);
+
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where: { organizationId },
+        select: { id: true, email: true, name: true, role: true, createdAt: true },
+        orderBy: { createdAt: "desc" },
+        take,
+        skip,
+      }),
+      prisma.user.count({ where: { organizationId } }),
+    ]);
+    return NextResponse.json({ users, total, limit: take, offset: skip });
   } catch (error) {
     console.error("[ADMIN USERS] GET error:", error);
     return NextResponse.json(

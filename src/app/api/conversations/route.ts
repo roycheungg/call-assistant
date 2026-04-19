@@ -28,11 +28,21 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url);
-    const page = parseInt(searchParams.get("page") || "1");
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const pageRaw = parseInt(searchParams.get("page") || "1");
+    const limitRaw = parseInt(searchParams.get("limit") || "50");
     const filter = searchParams.get("filter");
     const search = searchParams.get("search");
     const channel = searchParams.get("channel") || "all";
+
+    // Clamp untrusted inputs. Max limit 100; max page 500 (hard stop on
+    // runaway deep-paging — a tenant hitting page 501 has bigger problems).
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 50, 1), 100);
+    const page = Math.min(Math.max(Number.isFinite(pageRaw) ? pageRaw : 1, 1), 500);
+
+    // Window each channel query to `limit * page` rows so the merge-sort
+    // across channels remains correct up to the requested page without
+    // fetching the entire dataset. Capped at 1000 per channel.
+    const perChannelTake = Math.min(limit * page, 1000);
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const baseWhere: any = { organizationId: ctx.organizationId };
@@ -45,6 +55,8 @@ export async function GET(req: NextRequest) {
     }
 
     const results: NormalizedConversation[] = [];
+    let waTotal = 0;
+    let webTotal = 0;
 
     // WhatsApp conversations
     if (channel === "all" || channel === "whatsapp") {
@@ -58,19 +70,24 @@ export async function GET(req: NextRequest) {
         ];
       }
 
-      const waConvs = await prisma.whatsAppConversation.findMany({
-        where: waWhere,
-        include: {
-          lead: { select: { id: true, name: true, company: true } },
-          _count: { select: { messages: true } },
-          messages: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            select: { content: true },
+      const [waConvs, waCount] = await Promise.all([
+        prisma.whatsAppConversation.findMany({
+          where: waWhere,
+          include: {
+            lead: { select: { id: true, name: true, company: true } },
+            _count: { select: { messages: true } },
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { content: true },
+            },
           },
-        },
-        orderBy: { lastMessageAt: "desc" },
-      });
+          orderBy: { lastMessageAt: "desc" },
+          take: perChannelTake,
+        }),
+        prisma.whatsAppConversation.count({ where: waWhere }),
+      ]);
+      waTotal = waCount;
 
       for (const c of waConvs) {
         results.push({
@@ -102,20 +119,25 @@ export async function GET(req: NextRequest) {
         ];
       }
 
-      const webConvs = await prisma.websiteConversation.findMany({
-        where: webWhere,
-        include: {
-          lead: { select: { id: true, name: true, company: true } },
-          site: { select: { name: true, siteId: true } },
-          _count: { select: { messages: true } },
-          messages: {
-            orderBy: { createdAt: "desc" },
-            take: 1,
-            select: { content: true },
+      const [webConvs, webCount] = await Promise.all([
+        prisma.websiteConversation.findMany({
+          where: webWhere,
+          include: {
+            lead: { select: { id: true, name: true, company: true } },
+            site: { select: { name: true, siteId: true } },
+            _count: { select: { messages: true } },
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 1,
+              select: { content: true },
+            },
           },
-        },
-        orderBy: { lastMessageAt: "desc" },
-      });
+          orderBy: { lastMessageAt: "desc" },
+          take: perChannelTake,
+        }),
+        prisma.websiteConversation.count({ where: webWhere }),
+      ]);
+      webTotal = webCount;
 
       for (const c of webConvs) {
         results.push({
@@ -143,7 +165,7 @@ export async function GET(req: NextRequest) {
         new Date(a.lastMessageAt).getTime()
     );
 
-    const total = results.length;
+    const total = waTotal + webTotal;
     const start = (page - 1) * limit;
     const conversations = results.slice(start, start + limit);
 
@@ -151,6 +173,7 @@ export async function GET(req: NextRequest) {
       conversations,
       total,
       page,
+      limit,
       totalPages: Math.ceil(total / limit),
     });
   } catch (error) {

@@ -1,8 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createHmac } from "crypto";
+import { rateLimit, clientIpFromHeaders } from "@/lib/rate-limit";
 
 const WEBHOOK_SECRET = process.env.VAPI_WEBHOOK_SECRET;
+
+// Surface misconfiguration at boot instead of silently accepting unsigned
+// webhooks in production. In dev we log a warning but still allow them so
+// the Vapi dashboard's "test webhook" button keeps working.
+if (!WEBHOOK_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    console.error(
+      "[VAPI WEBHOOK] VAPI_WEBHOOK_SECRET is not set — ALL incoming webhooks will be rejected as unsigned."
+    );
+  } else {
+    console.warn(
+      "[VAPI WEBHOOK] VAPI_WEBHOOK_SECRET not set — dev-only bypass active. Unsigned webhooks will be accepted."
+    );
+  }
+}
 
 /**
  * Parse a Vapi transcript into a flat text string for analysis.
@@ -125,7 +141,11 @@ function extractCallerName(transcript: unknown): string | null {
 }
 
 function verifyVapiSignature(payload: string, signature: string | null): boolean {
-  if (!WEBHOOK_SECRET) return true; // Skip if no secret configured
+  // Production: a missing secret means we CANNOT verify anything — reject.
+  // Dev: allow so local testing / Vapi dashboard "test webhook" keeps working.
+  if (!WEBHOOK_SECRET) {
+    return process.env.NODE_ENV !== "production";
+  }
   if (!signature) return false;
   const expected = createHmac("sha256", WEBHOOK_SECRET).update(payload).digest("hex");
   return signature === expected;
@@ -146,11 +166,33 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
 
-    // Verify webhook signature if secret is configured
+    // Always run the check — its internal logic handles the dev/prod branch
+    // when the secret isn't configured. Removing the `WEBHOOK_SECRET &&`
+    // guard closes the prod bypass where unsigned webhooks were accepted.
     const signature = req.headers.get("x-vapi-signature");
-    if (WEBHOOK_SECRET && !verifyVapiSignature(rawBody, signature)) {
+    if (!verifyVapiSignature(rawBody, signature)) {
       console.warn("[VAPI WEBHOOK] Invalid signature");
       return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    // Rate limit by client IP (post-signature — attackers need a valid HMAC
+    // to even count against the bucket). Burst 20, refill 2/s — higher than
+    // WhatsApp since Vapi emits multiple events per call (start, transcript
+    // chunks, end-of-call, etc.).
+    const rl = rateLimit("vapi-webhook", clientIpFromHeaders(req.headers), {
+      tokens: 20,
+      refillPerSecond: 2,
+    });
+    if (!rl.allowed) {
+      return NextResponse.json(
+        { error: "rate_limited", retryAfterMs: rl.retryAfterMs },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil((rl.retryAfterMs ?? 1000) / 1000)),
+          },
+        }
+      );
     }
 
     const body = JSON.parse(rawBody);

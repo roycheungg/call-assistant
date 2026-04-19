@@ -7,6 +7,7 @@ import {
   waIdToPhone,
 } from "@/lib/whatsapp";
 import { buildSystemPrompt, getChatResponse } from "@/lib/claude";
+import { rateLimit } from "@/lib/rate-limit";
 
 // GET - Meta webhook verification
 export async function GET(request: Request) {
@@ -117,6 +118,21 @@ async function processMessage(
   const messageType = message.type as string;
 
   if (!waId || !waMessageId) return;
+
+  // Rate limit per-sender. Scoped by org so one spammer can't starve other
+  // tenants. Burst of 10, refill 1/s — comfortable for real users, blocks
+  // flood patterns. Skip silently (no reply) to avoid cost blowup + to not
+  // tip off the attacker.
+  const rl = rateLimit("whatsapp-sender", `${organizationId}:${waId}`);
+  if (!rl.allowed) {
+    console.warn(
+      "[WHATSAPP WEBHOOK] Rate limited:",
+      waId,
+      "retryAfterMs=",
+      rl.retryAfterMs
+    );
+    return;
+  }
 
   const existing = await prisma.whatsAppMessage.findUnique({
     where: { waMessageId },

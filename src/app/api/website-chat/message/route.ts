@@ -7,35 +7,7 @@ import {
   parseLeadMarker,
   isValidEmail,
 } from "@/lib/website-chat";
-
-// Simple in-memory rate limiter
-const RATE_LIMIT_TOKENS = 10;
-const RATE_LIMIT_REFILL_RATE = 1; // tokens per second
-const rateLimitBuckets = new Map<string, { tokens: number; lastRefill: number }>();
-
-function checkRateLimit(key: string): boolean {
-  const now = Date.now();
-  const bucket = rateLimitBuckets.get(key) || {
-    tokens: RATE_LIMIT_TOKENS,
-    lastRefill: now,
-  };
-
-  const elapsed = (now - bucket.lastRefill) / 1000;
-  bucket.tokens = Math.min(
-    RATE_LIMIT_TOKENS,
-    bucket.tokens + elapsed * RATE_LIMIT_REFILL_RATE
-  );
-  bucket.lastRefill = now;
-
-  if (bucket.tokens < 1) {
-    rateLimitBuckets.set(key, bucket);
-    return false;
-  }
-
-  bucket.tokens -= 1;
-  rateLimitBuckets.set(key, bucket);
-  return true;
-}
+import { rateLimit } from "@/lib/rate-limit";
 
 export async function OPTIONS(req: NextRequest) {
   return new Response(null, {
@@ -100,10 +72,18 @@ export async function POST(req: NextRequest) {
     }
 
     // Rate limit by sessionId
-    if (!checkRateLimit(sessionId)) {
+    const rl = rateLimit("website-chat-message", sessionId);
+    if (!rl.allowed) {
       return new Response(
-        JSON.stringify({ error: "Rate limited" }),
-        { status: 429, headers: { ...headers, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "rate_limited", retryAfterMs: rl.retryAfterMs }),
+        {
+          status: 429,
+          headers: {
+            ...headers,
+            "Content-Type": "application/json",
+            "Retry-After": String(Math.ceil((rl.retryAfterMs ?? 1000) / 1000)),
+          },
+        }
       );
     }
 
