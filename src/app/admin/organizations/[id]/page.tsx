@@ -59,6 +59,14 @@ interface Org {
     vapiPhoneNumberId: string | null;
     calComApiKey: string | null;
     calComEventTypeId: string | null;
+    instagramEnabled: boolean;
+    instagramSystemPrompt: string | null;
+    instagramBusinessId: string | null;
+    instagramAccessToken: string | null;
+    facebookEnabled: boolean;
+    facebookSystemPrompt: string | null;
+    facebookPageId: string | null;
+    facebookPageAccessToken: string | null;
   } | null;
   users: Array<{
     id: string;
@@ -502,6 +510,18 @@ export default function OrganizationDetailPage() {
                 onToggle={(v) => updateFeature("whatsappEnabled", v)}
               />
               <FeatureToggle
+                label="Instagram"
+                description="Inbound Instagram DMs via Meta Graph API"
+                enabled={org.settings.instagramEnabled}
+                onToggle={(v) => updateFeature("instagramEnabled", v)}
+              />
+              <FeatureToggle
+                label="Facebook Messenger"
+                description="Inbound Messenger DMs via Meta Graph API"
+                enabled={org.settings.facebookEnabled}
+                onToggle={(v) => updateFeature("facebookEnabled", v)}
+              />
+              <FeatureToggle
                 label="Voice agent (Vapi)"
                 description="Inbound phone calls handled by AI"
                 enabled={org.settings.voiceEnabled}
@@ -529,6 +549,149 @@ export default function OrganizationDetailPage() {
                 When empty, the WhatsApp bot auto-builds a prompt from this
                 org&apos;s business info.
               </p>
+            </div>
+
+            {/* Instagram Direct Messages (Meta Graph API) */}
+            <div className="border-t border-white/10 pt-5">
+              <label className="text-sm font-medium">
+                Instagram (Meta Graph API)
+              </label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Requires a Meta app with the Instagram Graph API product
+                enabled, an Instagram Business account linked to a Facebook
+                Page, and the webhook subscription pointing at{" "}
+                <code className="text-[10px]">/api/meta/webhook</code>.
+              </p>
+              <a
+                href="https://developers.facebook.com/docs/messenger-platform/instagram/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-400 hover:underline inline-flex items-center gap-1 mt-2"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Instagram Messaging setup docs
+              </a>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium">
+                    Instagram Business Account ID
+                  </label>
+                  <Input
+                    placeholder="17841400000000000"
+                    value={org.settings.instagramBusinessId || ""}
+                    onChange={(e) =>
+                      updateFeature(
+                        "instagramBusinessId",
+                        e.target.value || null
+                      )
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">
+                    Access Token
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="IGAA..."
+                    value={org.settings.instagramAccessToken || ""}
+                    onChange={(e) =>
+                      updateFeature(
+                        "instagramAccessToken",
+                        e.target.value || null
+                      )
+                    }
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <label className="text-xs font-medium mt-3 block">
+                Instagram system prompt
+              </label>
+              <Textarea
+                value={org.settings.instagramSystemPrompt || ""}
+                onChange={(e) =>
+                  updateFeature(
+                    "instagramSystemPrompt",
+                    e.target.value || null
+                  )
+                }
+                rows={4}
+                placeholder="Leave empty for auto-generated channel prompt."
+                className="mt-1 font-mono text-xs"
+              />
+            </div>
+
+            {/* Facebook Messenger (Meta Graph API) */}
+            <div className="border-t border-white/10 pt-5">
+              <label className="text-sm font-medium">
+                Facebook Messenger (Meta Graph API)
+              </label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Requires a Meta app with Messenger Platform, a Facebook Page
+                with the Page access token, and the webhook subscription on
+                the <code className="text-[10px]">page.messages</code> field.
+              </p>
+              <a
+                href="https://developers.facebook.com/docs/messenger-platform/webhooks/"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs text-blue-400 hover:underline inline-flex items-center gap-1 mt-2"
+              >
+                <ExternalLink className="w-3 h-3" />
+                Messenger webhook setup docs
+              </a>
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium">
+                    Facebook Page ID
+                  </label>
+                  <Input
+                    placeholder="123456789012345"
+                    value={org.settings.facebookPageId || ""}
+                    onChange={(e) =>
+                      updateFeature(
+                        "facebookPageId",
+                        e.target.value || null
+                      )
+                    }
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">
+                    Page Access Token
+                  </label>
+                  <Input
+                    type="password"
+                    placeholder="EAA..."
+                    value={org.settings.facebookPageAccessToken || ""}
+                    onChange={(e) =>
+                      updateFeature(
+                        "facebookPageAccessToken",
+                        e.target.value || null
+                      )
+                    }
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <label className="text-xs font-medium mt-3 block">
+                Messenger system prompt
+              </label>
+              <Textarea
+                value={org.settings.facebookSystemPrompt || ""}
+                onChange={(e) =>
+                  updateFeature(
+                    "facebookSystemPrompt",
+                    e.target.value || null
+                  )
+                }
+                rows={4}
+                placeholder="Leave empty for auto-generated channel prompt."
+                className="mt-1 font-mono text-xs"
+              />
             </div>
 
             <div className="border-t border-white/10 pt-5">

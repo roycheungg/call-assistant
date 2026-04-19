@@ -14,6 +14,8 @@ import {
   MessageSquare,
   MessageCircle,
   Phone,
+  Camera,
+  Send,
 } from "lucide-react";
 import { apiFetch } from "@/lib/api-fetch";
 
@@ -30,6 +32,10 @@ interface Settings {
   chatbotEnabled: boolean;
   whatsappEnabled: boolean;
   voiceEnabled: boolean;
+  instagramEnabled: boolean;
+  instagramBusinessId: string | null;
+  facebookEnabled: boolean;
+  facebookPageId: string | null;
 }
 
 interface PhoneNumber {
@@ -59,6 +65,10 @@ export default function SettingsPage() {
           chatbotEnabled: !!data.settings?.chatbotEnabled,
           whatsappEnabled: !!data.settings?.whatsappEnabled,
           voiceEnabled: !!data.settings?.voiceEnabled,
+          instagramEnabled: !!data.settings?.instagramEnabled,
+          instagramBusinessId: data.settings?.instagramBusinessId ?? null,
+          facebookEnabled: !!data.settings?.facebookEnabled,
+          facebookPageId: data.settings?.facebookPageId ?? null,
         };
         setSettings(s);
 
@@ -204,6 +214,58 @@ export default function SettingsPage() {
             ) : (
               <p className="text-sm text-muted-foreground">
                 No phone number assigned yet — contact DOAI.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Instagram — badge + business account id */}
+      {settings.instagramEnabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <Camera className="w-5 h-5" />
+                Instagram
+              </span>
+              <Badge variant="default">Enabled</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {settings.instagramBusinessId ? (
+              <p className="text-sm font-mono">
+                Business ID: {settings.instagramBusinessId}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No Instagram business account linked yet — contact DOAI.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Facebook Messenger — badge + page id */}
+      {settings.facebookEnabled && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2">
+                <Send className="w-5 h-5" />
+                Facebook Messenger
+              </span>
+              <Badge variant="default">Enabled</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {settings.facebookPageId ? (
+              <p className="text-sm font-mono">
+                Page ID: {settings.facebookPageId}
+              </p>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No Facebook Page linked yet — contact DOAI.
               </p>
             )}
           </CardContent>
