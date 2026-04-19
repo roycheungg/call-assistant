@@ -99,7 +99,6 @@ model OrganizationSettings {
   services             Json     @default("[]")
   teamMembers          Json     @default("[]")
   operatingHours       Json     @default("{}")
-  greetingMessage      String?
   vapiAssistantId      String?
   vapiPhoneNumberId    String?
   whatsappSystemPrompt String?

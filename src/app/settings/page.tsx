@@ -27,7 +27,6 @@ interface Settings {
   services: Service[];
   teamMembers: TeamMember[];
   operatingHours: { start: string; end: string; timezone: string; days: number[] };
-  greetingMessage: string | null;
 }
 
 export default function SettingsPage() {
@@ -114,15 +113,6 @@ export default function SettingsPage() {
               className="mt-1"
               rows={3}
               placeholder="Describe what your business does. The AI will use this to explain your services to callers."
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Greeting Message</label>
-            <Input
-              value={settings.greetingMessage || ""}
-              onChange={(e) => setSettings({ ...settings, greetingMessage: e.target.value })}
-              className="mt-1"
-              placeholder="Hello, thank you for calling [Business Name]! How can I help you today?"
             />
           </div>
         </CardContent>

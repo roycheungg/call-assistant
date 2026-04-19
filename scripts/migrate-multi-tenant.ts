@@ -83,7 +83,6 @@ async function main() {
             teamMembers: o.teamMembers as any,
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             operatingHours: o.operatingHours as any,
-            greetingMessage: o.greetingMessage,
             vapiAssistantId: o.vapiAssistantId,
             vapiPhoneNumberId: o.vapiPhoneNumberId,
             whatsappSystemPrompt: o.whatsappSystemPrompt,
