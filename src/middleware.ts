@@ -21,6 +21,7 @@ export function middleware(req: NextRequest) {
     "/api/website-chat",
     "/api/whatsapp",
     "/api/vapi",
+    "/api/meta",
     "/api/auth",
     "/embed",
     "/login",
