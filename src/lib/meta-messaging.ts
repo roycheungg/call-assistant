@@ -150,7 +150,19 @@ async function sendText(
   // Keep a comfortable margin.
   const truncated = text.length > 1800 ? text.slice(0, 1797) + "..." : text;
 
-  const url = `${GRAPH_API_BASE}/${ctx.accountId}/messages`;
+  // Endpoint differs by channel:
+  //   - Instagram "Business Login" (IGAA... tokens): graph.instagram.com /me/messages
+  //   - Facebook Messenger / older IG via Facebook Page (EAA tokens):
+  //     graph.facebook.com /{pageId or igBusinessId}/messages
+  // We detect the IGAA token prefix to pick the right host. If a caller
+  // later switches Instagram to the Facebook-Login flow and gets an EAA
+  // Page token, this same code handles it automatically.
+  const isInstagramLoginToken = ctx.accessToken.startsWith("IGAA");
+  const url =
+    channel === "instagram" && isInstagramLoginToken
+      ? `https://graph.instagram.com/v21.0/me/messages`
+      : `${GRAPH_API_BASE}/${ctx.accountId}/messages`;
+
   const payload: Record<string, unknown> = {
     recipient: { id: recipientId },
     message: { text: truncated },
