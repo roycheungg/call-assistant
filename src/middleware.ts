@@ -28,6 +28,11 @@ export function middleware(req: NextRequest) {
     "/widget.js",
     "/test-widget.html",
     "/favicon",
+    // Legal pages must be publicly accessible so Meta (app review),
+    // Google, and end users can reach them without credentials.
+    "/privacy-policy",
+    "/terms-of-service",
+    "/data-deletion",
   ];
   if (publicPrefixes.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();

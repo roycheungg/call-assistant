@@ -7,8 +7,16 @@ import { Sidebar } from "@/components/dashboard/sidebar";
 export function MainWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
 
-  // Embed page and login pages: no sidebar, no padding, no chrome
-  if (pathname?.startsWith("/embed") || pathname?.startsWith("/login")) {
+  // Embed, login, and public legal pages: no sidebar, no padding, no chrome.
+  // The legal pages must render standalone so Meta's app-review crawler
+  // (and search engines / end users) see the content without logged-in UI.
+  if (
+    pathname?.startsWith("/embed") ||
+    pathname?.startsWith("/login") ||
+    pathname?.startsWith("/privacy-policy") ||
+    pathname?.startsWith("/terms-of-service") ||
+    pathname?.startsWith("/data-deletion")
+  ) {
     return <>{children}</>;
   }
 
