@@ -439,6 +439,11 @@ async function processMessageEvent(
   const aiResponse = await getChatResponse(chatMessages, systemPrompt, {
     organizationId: ctx.organizationId,
     allowCLI: true,
+    // Let Claude extract issue / name / email / company onto the lead
+    // when the customer shares them. Mirrors the Vapi voice flow.
+    extractToLead: conversation.leadId
+      ? { leadId: conversation.leadId }
+      : undefined,
   });
 
   const sendResult = await sendText(ctx, channel, senderId, aiResponse);

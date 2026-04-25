@@ -7,9 +7,110 @@ interface ChatMessage {
   content: string;
 }
 
+interface LeadExtractionTarget {
+  /** Lead row id to upsert extracted details onto. */
+  leadId: string;
+}
+
 interface ChatOptions {
   organizationId?: string;
   allowCLI?: boolean;
+  /**
+   * When set, the Claude API call adds a `save_customer_details` tool.
+   * If Claude decides to call it (the customer has shared name / email /
+   * company / a description of what they need), we upsert those fields
+   * onto the named lead. The CLI fallback ignores this — it has no
+   * tool-use support.
+   */
+  extractToLead?: LeadExtractionTarget;
+}
+
+/**
+ * Anthropic tool definition. Mirrors the shape of Vapi's existing
+ * save_customer_details function so all channels populate Lead fields
+ * consistently.
+ */
+const SAVE_CUSTOMER_DETAILS_TOOL = {
+  name: "save_customer_details",
+  description:
+    "Save NEW information the customer has shared in this conversation. " +
+    "Call this only when you've actually learned something specific the " +
+    "team would want to follow up on (their name, email, company, or a " +
+    "summary of what they need help with). Do NOT call it for casual " +
+    "chitchat or when nothing new was shared since the previous turn.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      issue: {
+        type: "string",
+        description:
+          "Short one-sentence summary of what the customer wants or needs.",
+      },
+      name: { type: "string", description: "Customer's name if mentioned." },
+      email: { type: "string", description: "Email address if shared." },
+      company: { type: "string", description: "Company name if mentioned." },
+    },
+  },
+};
+
+const TOOL_INSTRUCTION =
+  "\n\nIMPORTANT: When the customer shares their name, email, company, " +
+  "or describes what they need help with, call the `save_customer_details` " +
+  "tool with the new info. Only call it when you've genuinely learned " +
+  "something — don't call it on every message.";
+
+interface ToolUseBlock {
+  type: "tool_use";
+  id: string;
+  name: string;
+  input: Record<string, unknown>;
+}
+
+interface TextBlock {
+  type: "text";
+  text: string;
+}
+
+type ContentBlock = ToolUseBlock | TextBlock | { type: string };
+
+/**
+ * Apply customer details extracted by Claude to the lead row. Truncates
+ * each field to a sensible length. Failures are logged and swallowed —
+ * never blocks the user reply.
+ */
+async function applyCustomerDetails(
+  leadId: string,
+  details: {
+    issue?: string;
+    name?: string;
+    email?: string;
+    company?: string;
+  }
+): Promise<void> {
+  const data: Record<string, string> = {};
+  if (typeof details.issue === "string" && details.issue.trim()) {
+    data.issue = details.issue.trim().slice(0, 500);
+  }
+  if (typeof details.name === "string" && details.name.trim()) {
+    data.name = details.name.trim().slice(0, 200);
+  }
+  if (typeof details.email === "string" && details.email.trim()) {
+    data.email = details.email.trim().slice(0, 200);
+  }
+  if (typeof details.company === "string" && details.company.trim()) {
+    data.company = details.company.trim().slice(0, 200);
+  }
+  if (Object.keys(data).length === 0) return;
+
+  try {
+    await prisma.lead.update({ where: { id: leadId }, data });
+    console.log(
+      `[CLAUDE] Lead ${leadId} updated via save_customer_details:`,
+      Object.keys(data).join(", ")
+    );
+  } catch (err) {
+    console.error("[CLAUDE] Lead update failed:", err);
+  }
 }
 
 export type MessagingChannel = "whatsapp" | "instagram" | "facebook";
@@ -114,19 +215,75 @@ async function getChatResponseCLI(
 async function getChatResponseAPI(
   messages: ChatMessage[],
   systemPrompt: string,
-  apiKey: string
+  apiKey: string,
+  extractToLead?: LeadExtractionTarget
 ): Promise<string> {
   const anthropic = new Anthropic({ apiKey });
   const recentMessages = messages.slice(-30);
+  const enableTools = Boolean(extractToLead);
 
-  const response = await anthropic.messages.create({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const baseRequest: any = {
     model: "claude-sonnet-4-20250514",
     max_tokens: 1024,
-    system: systemPrompt,
+    system: enableTools ? systemPrompt + TOOL_INSTRUCTION : systemPrompt,
     messages: recentMessages,
-  });
+  };
+  if (enableTools) baseRequest.tools = [SAVE_CUSTOMER_DETAILS_TOOL];
 
-  const textBlock = response.content.find((block) => block.type === "text");
+  const first = await anthropic.messages.create(baseRequest);
+  const firstContent = first.content as ContentBlock[];
+
+  // Process any tool calls from this turn. Claude may emit text + tool_use
+  // in one response, or stop_reason="tool_use" expecting tool_results.
+  const toolUses = firstContent.filter(
+    (b): b is ToolUseBlock => b.type === "tool_use"
+  );
+  if (extractToLead && toolUses.length > 0) {
+    for (const block of toolUses) {
+      if (block.name === "save_customer_details") {
+        await applyCustomerDetails(
+          extractToLead.leadId,
+          block.input as {
+            issue?: string;
+            name?: string;
+            email?: string;
+            company?: string;
+          }
+        );
+      }
+    }
+  }
+
+  // If Claude stopped to use a tool, it hasn't produced final text yet.
+  // Send the tool_results back so it can finish its reply.
+  if (first.stop_reason === "tool_use" && extractToLead) {
+    const toolResults = toolUses.map((b) => ({
+      type: "tool_result" as const,
+      tool_use_id: b.id,
+      content: "Saved.",
+    }));
+
+    const followUp = await anthropic.messages.create({
+      ...baseRequest,
+      messages: [
+        ...recentMessages,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { role: "assistant", content: first.content as any },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        { role: "user", content: toolResults as any },
+      ],
+    });
+
+    const followText = (followUp.content as ContentBlock[]).find(
+      (b): b is TextBlock => b.type === "text"
+    );
+    return followText?.text || "Sorry, I was unable to generate a response.";
+  }
+
+  const textBlock = firstContent.find(
+    (b): b is TextBlock => b.type === "text"
+  );
   return textBlock?.text || "Sorry, I was unable to generate a response.";
 }
 
@@ -145,7 +302,12 @@ export async function getChatResponse(
     });
 
     if (org?.anthropicApiKeyOverride) {
-      return getChatResponseAPI(messages, systemPrompt, org.anthropicApiKeyOverride);
+      return getChatResponseAPI(
+        messages,
+        systemPrompt,
+        org.anthropicApiKeyOverride,
+        options.extractToLead
+      );
     }
 
     // Claude CLI fallback - only allowed for the DOAI org and only if no shared key is set
@@ -154,13 +316,20 @@ export async function getChatResponse(
       org?.slug === "doai" &&
       !process.env.ANTHROPIC_API_KEY
     ) {
+      // CLI path doesn't support tool use; lead extraction is silently
+      // skipped. Acceptable: CLI is dev-only / Max-plan local testing.
       return getChatResponseCLI(messages, systemPrompt);
     }
   }
 
   // Default: use the shared Anthropic API key
   if (process.env.ANTHROPIC_API_KEY) {
-    return getChatResponseAPI(messages, systemPrompt, process.env.ANTHROPIC_API_KEY);
+    return getChatResponseAPI(
+      messages,
+      systemPrompt,
+      process.env.ANTHROPIC_API_KEY,
+      options?.extractToLead
+    );
   }
 
   // Last-resort fallback
