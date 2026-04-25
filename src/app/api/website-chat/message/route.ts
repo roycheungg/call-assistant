@@ -125,10 +125,17 @@ export async function POST(req: NextRequest) {
       content: m.content,
     }));
 
-    // Get AI response
+    // Get AI response. If a lead is already attached to this conversation
+    // (set on a previous turn via the [LEAD:...] marker or an explicit
+    // form submission), let Claude also extract details into the lead row
+    // through the save_customer_details tool. First-turn messages without
+    // a lead yet still rely on the marker flow below.
     const rawResponse = await getChatResponse(chatMessages, site.systemPrompt, {
       organizationId: site.organizationId,
       allowCLI: true,
+      extractToLead: conversation.leadId
+        ? { leadId: conversation.leadId }
+        : undefined,
     });
 
     // Parse for lead marker

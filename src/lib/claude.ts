@@ -29,15 +29,19 @@ interface ChatOptions {
  * Anthropic tool definition. Mirrors the shape of Vapi's existing
  * save_customer_details function so all channels populate Lead fields
  * consistently.
+ *
+ * Earlier (cautious) wording made the model under-call the tool. Current
+ * description leans into "call it whenever..." with examples in the
+ * system-prompt instruction below.
  */
 const SAVE_CUSTOMER_DETAILS_TOOL = {
   name: "save_customer_details",
   description:
-    "Save NEW information the customer has shared in this conversation. " +
-    "Call this only when you've actually learned something specific the " +
-    "team would want to follow up on (their name, email, company, or a " +
-    "summary of what they need help with). Do NOT call it for casual " +
-    "chitchat or when nothing new was shared since the previous turn.",
+    "Record customer details to the CRM. Call this whenever the customer " +
+    "mentions any of: their name, an email, a company name, or describes " +
+    "what they're looking for / what they need. You can call this multiple " +
+    "times in the same conversation as new pieces of info arrive — pass " +
+    "only the fields you have. The CRM merges them into the lead record.",
   input_schema: {
     type: "object" as const,
     properties: {
@@ -54,10 +58,20 @@ const SAVE_CUSTOMER_DETAILS_TOOL = {
 };
 
 const TOOL_INSTRUCTION =
-  "\n\nIMPORTANT: When the customer shares their name, email, company, " +
-  "or describes what they need help with, call the `save_customer_details` " +
-  "tool with the new info. Only call it when you've genuinely learned " +
-  "something — don't call it on every message.";
+  "\n\n## Saving customer details\n" +
+  "You have access to a `save_customer_details` tool that writes to our " +
+  "CRM. **Call it whenever the customer mentions any of: their name, an " +
+  "email, a company name, or what they're looking for.** Call it as soon " +
+  "as you learn each piece — you can call it multiple times across the " +
+  "conversation as new info arrives. Pass only the fields you have. The " +
+  "team relies on these fields to follow up.\n\n" +
+  "Examples that should trigger a call:\n" +
+  '- User: "I\'m Sarah from Acme" → call save_customer_details({name: "Sarah", company: "Acme"})\n' +
+  '- User: "my email is x@y.com" → call save_customer_details({email: "x@y.com"})\n' +
+  '- User: "we need an AI bot for support" → call save_customer_details({issue: "AI bot for support"})\n' +
+  "\n" +
+  "Don't ask permission, don't announce it — just call the tool, then " +
+  "reply naturally to the customer.";
 
 interface ToolUseBlock {
   type: "tool_use";
@@ -239,6 +253,17 @@ async function getChatResponseAPI(
   const toolUses = firstContent.filter(
     (b): b is ToolUseBlock => b.type === "tool_use"
   );
+  const textBlocksCount = firstContent.filter((b) => b.type === "text").length;
+
+  // Observability: log every Claude turn so we can see whether the tool
+  // is being offered, accepted, or ignored. No message content is logged.
+  console.log(
+    `[CLAUDE] tools=${enableTools ? "on" : "off"} ` +
+      `stop_reason=${first.stop_reason} ` +
+      `tool_uses=${toolUses.length} ` +
+      `text_blocks=${textBlocksCount}`
+  );
+
   if (extractToLead && toolUses.length > 0) {
     for (const block of toolUses) {
       if (block.name === "save_customer_details") {
@@ -274,6 +299,9 @@ async function getChatResponseAPI(
         { role: "user", content: toolResults as any },
       ],
     });
+    console.log(
+      `[CLAUDE] follow-up stop_reason=${followUp.stop_reason}`
+    );
 
     const followText = (followUp.content as ContentBlock[]).find(
       (b): b is TextBlock => b.type === "text"
