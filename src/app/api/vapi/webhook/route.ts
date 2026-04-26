@@ -93,6 +93,28 @@ function generateSummaryFromTranscript(transcript: unknown): string | null {
 }
 
 /**
+ * Parse a date + optional time string from a Vapi structured output into
+ * a UTC Date. Vapi may emit ISO (`2026-04-26`) or natural-language
+ * (`tomorrow`, `April 26`) — `new Date()` covers most of both. Returns
+ * null on anything we can't parse so the caller can skip the auto-action.
+ */
+function parseAppointmentDateTime(
+  dateStr: string | undefined | null,
+  timeStr: string | undefined | null
+): Date | null {
+  if (!dateStr) return null;
+  // Try combined ISO-ish "YYYY-MM-DD HH:mm" or "YYYY-MM-DDTHH:mm" first.
+  if (timeStr) {
+    const sep = dateStr.includes("T") ? "" : "T";
+    const combined = `${dateStr}${sep}${timeStr}`;
+    const parsed = new Date(combined);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  const parsed = new Date(dateStr);
+  return isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/**
  * Derive sentiment from the full transcript text + summary.
  * Checks both sources so sentiment works even when summary is null.
  */
@@ -256,9 +278,19 @@ async function handleEndOfCallReport(message: any) {
   // Extract transcript - Vapi puts it in artifact.transcript
   const transcript = artifact.transcript || message.transcript || null;
 
-  // Extract summary - Vapi puts it in analysis.summary.
-  // If missing, generate a basic summary from the transcript.
-  let summary = analysis.summary || message.summary || null;
+  // Vapi structured outputs (when configured per-template on the assistant)
+  // arrive in `analysis.structuredData`. Keys can be either the template
+  // name verbatim (e.g. "Call Summary") or a camelCased variant — we check
+  // both. Falls back to Vapi's default `analysis.summary`, then to our
+  // homegrown transcript parser as a last resort.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const structured: Record<string, any> = analysis.structuredData || {};
+  let summary =
+    structured["Call Summary"] ||
+    structured.callSummary ||
+    analysis.summary ||
+    message.summary ||
+    null;
   if (!summary && transcript) {
     summary = generateSummaryFromTranscript(transcript);
   }
@@ -300,8 +332,12 @@ async function handleEndOfCallReport(message: any) {
     endedReason,
   });
 
-  // Derive sentiment from both summary and transcript
-  const sentiment = deriveSentiment(summary, transcript);
+  // Sentiment: prefer Vapi's "Customer Sentiment" structured output if
+  // configured; fall back to keyword-based deriveSentiment.
+  const sentiment =
+    structured["Customer Sentiment"] ||
+    structured.customerSentiment ||
+    deriveSentiment(summary, transcript);
 
   // Try to extract caller name from transcript
   const callerName = extractCallerName(transcript);
@@ -397,4 +433,69 @@ async function handleEndOfCallReport(message: any) {
   console.log(
     `[VAPI WEBHOOK] Call saved: ${callId} | Phone: ${phoneNumber} | Duration: ${duration}s`
   );
+
+  // Auto-callback safety net: if Vapi's structured output detected an
+  // appointment, persist it as a Callback row even if the AI forgot to
+  // invoke the in-call `book_callback` tool. Idempotent — we skip if the
+  // in-call path already created a Callback row for this lead within
+  // the call's time window.
+  const appointmentBooked =
+    structured["Appointment Booked"] === true ||
+    structured.appointmentBooked === true;
+
+  if (appointmentBooked && lead) {
+    const dateStr =
+      structured["Appointment Date"] || structured.appointmentDate;
+    const timeStr =
+      structured["Appointment Time"] || structured.appointmentTime;
+    const scheduledAt = parseAppointmentDateTime(dateStr, timeStr);
+
+    if (!scheduledAt) {
+      console.warn(
+        `[VAPI WEBHOOK] appointmentBooked=true but couldn't parse date "${dateStr}" time "${timeStr}" — skipping auto-callback`
+      );
+    } else {
+      const callStartedAt = call.startedAt
+        ? new Date(call.startedAt)
+        : new Date();
+      const existing = await prisma.callback.findFirst({
+        where: {
+          leadId: lead.id,
+          createdAt: {
+            gte: new Date(callStartedAt.getTime() - 5 * 60_000),
+          },
+        },
+      });
+
+      if (existing) {
+        console.log(
+          `[VAPI WEBHOOK] Skipping auto-callback — in-call tool already created one for lead ${lead.id}`
+        );
+      } else {
+        const settings = await prisma.organizationSettings.findUnique({
+          where: { organizationId },
+        });
+        const teamMembers =
+          (settings?.teamMembers as Array<{ name: string }>) || [];
+        const assignedTo = teamMembers[0]?.name || "Team";
+
+        await prisma.callback.create({
+          data: {
+            organizationId,
+            leadId: lead.id,
+            assignedTo,
+            scheduledAt,
+            notes: "Auto-created from end-of-call structured output",
+          },
+        });
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: { status: "callback_booked" },
+        });
+        console.log(
+          `[VAPI WEBHOOK] Auto-created callback for lead ${lead.id} at ${scheduledAt.toISOString()} (${assignedTo})`
+        );
+      }
+    }
+  }
 }
