@@ -97,8 +97,6 @@ model OrganizationSettings {
   organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   businessName         String
   teamMembers          Json     @default("[]")
-  vapiAssistantId      String?
-  vapiPhoneNumberId    String?
   whatsappSystemPrompt String?
   whatsappEnabled      Boolean  @default(false)
   chatbotEnabled       Boolean  @default(false)

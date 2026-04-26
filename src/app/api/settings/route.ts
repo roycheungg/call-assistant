@@ -14,8 +14,6 @@ const SUPER_ADMIN_ONLY_FIELDS = [
   "whatsappEnabled",
   "chatbotEnabled",
   "voiceEnabled",
-  "vapiAssistantId",
-  "vapiPhoneNumberId",
   "calComApiKey",
   "calComEventTypeId",
   // Social channels — per-org tokens and system prompts stay behind the

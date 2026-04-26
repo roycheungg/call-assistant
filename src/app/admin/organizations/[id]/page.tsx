@@ -55,8 +55,6 @@ interface Org {
     whatsappEnabled: boolean;
     voiceEnabled: boolean;
     whatsappSystemPrompt: string | null;
-    vapiAssistantId: string | null;
-    vapiPhoneNumberId: string | null;
     calComApiKey: string | null;
     calComEventTypeId: string | null;
     instagramEnabled: boolean;
@@ -330,8 +328,6 @@ export default function OrganizationDetailPage() {
           whatsappEnabled: org.settings.whatsappEnabled,
           voiceEnabled: org.settings.voiceEnabled,
           whatsappSystemPrompt: org.settings.whatsappSystemPrompt,
-          vapiAssistantId: org.settings.vapiAssistantId,
-          vapiPhoneNumberId: org.settings.vapiPhoneNumberId,
         }),
       });
       if (!res.ok) {
@@ -696,12 +692,12 @@ export default function OrganizationDetailPage() {
 
             <div className="border-t border-white/10 pt-5">
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                Voice agent (Vapi) prompt
+                Voice agent (Vapi)
               </label>
               <p className="text-sm text-slate-400 mt-1">
-                Vapi assistant prompts live in the Vapi dashboard. Edit there,
-                then paste the Assistant ID below so inbound calls route
-                correctly.
+                Vapi assistant prompts live in the Vapi dashboard. Inbound
+                calls route to this org via the org&apos;s Phone Numbers
+                (managed in the Phone Numbers section above).
               </p>
               <a
                 href="https://dashboard.vapi.ai"
@@ -712,36 +708,6 @@ export default function OrganizationDetailPage() {
                 <ExternalLink className="w-3 h-3" />
                 Open Vapi dashboard
               </a>
-              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs font-medium">Assistant ID</label>
-                  <Input
-                    value={org.settings.vapiAssistantId || ""}
-                    onChange={(e) =>
-                      updateFeature(
-                        "vapiAssistantId",
-                        e.target.value || null
-                      )
-                    }
-                    className="mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">
-                    Default Phone Number ID
-                  </label>
-                  <Input
-                    value={org.settings.vapiPhoneNumberId || ""}
-                    onChange={(e) =>
-                      updateFeature(
-                        "vapiPhoneNumberId",
-                        e.target.value || null
-                      )
-                    }
-                    className="mt-1"
-                  />
-                </div>
-              </div>
 
               {/* Cal.com integration — books an event when the voice agent
                   creates a callback. Optional; leave blank to skip. */}
