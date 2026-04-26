@@ -210,17 +210,22 @@ async function getChatResponseCLI(
   // Pass the explicit extension so the binary is found on both platforms.
   const binary = process.platform === "win32" ? "claude.exe" : "claude";
 
-  // The CLI's default system prompt is the agentic-coding one — it pulls
-  // in CLAUDE.md/AGENTS.md from the cwd and the user's home dir, which on
-  // prod (cwd=/home/kaia/...) made the bot roleplay as "Kaia" and ignore
-  // our IG/WA persona. Pass --system-prompt to fully replace the default
-  // with the org's per-channel prompt.
+  // The CLI's default system prompt is the agentic-coding one and it
+  // walks up the cwd looking for CLAUDE.md / AGENTS.md to inject as
+  // ambient context. On prod the Node service's cwd is
+  // /home/kaia/doai/call-assistant, which means the parent
+  // /home/kaia/doai/CLAUDE.md gets pulled in — and that file is full of
+  // "KAIA bot interface" / "KAIA Discord bridge" references for the
+  // separate doai brain repo. Even with --system-prompt fully replacing
+  // our system prompt, that ambient context leaked through and Claude
+  // started mixing personas ("I'm KAIA 🤖").
   //
-  // Note: tried adding --bare to skip CLAUDE.md auto-discovery, but that
-  // mode also disables OAuth/keychain auth and requires ANTHROPIC_API_KEY,
-  // which we don't set on prod. Without --bare the CLI will still pick up
-  // CLAUDE.md from the cwd, but --system-prompt's full replacement of the
-  // default agentic prompt is enough to neutralise the persona bleed.
+  // Run the CLI from /tmp instead so the upward walk finds no CLAUDE.md
+  // and the only persona instructions are the org's per-channel prompt.
+  // (Can't use --bare — it disables OAuth/keychain and would require
+  // ANTHROPIC_API_KEY which we don't set on prod.)
+  const platformCwd = process.platform === "win32" ? undefined : "/tmp";
+
   return new Promise((resolve) => {
     execFile(
       binary,
@@ -232,7 +237,7 @@ async function getChatResponseCLI(
         systemPrompt,
         prompt,
       ],
-      { timeout: 60_000, maxBuffer: 1024 * 1024 },
+      { timeout: 60_000, maxBuffer: 1024 * 1024, cwd: platformCwd },
       (error, stdout, stderr) => {
         if (error) {
           console.error("[CLAUDE CLI] Error:", error.message);
