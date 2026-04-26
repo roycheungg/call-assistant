@@ -323,11 +323,25 @@ export default function OrganizationDetailPage() {
       const res = await fetch(`/api/settings?asOrg=${org.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
+        // Send every editable feature field. Earlier this only sent four
+        // fields, which silently dropped IG/FB/Cal.com edits — typing into
+        // those inputs mutated local state but the values never reached
+        // the API, so the DB rows stayed NULL.
         body: JSON.stringify({
           chatbotEnabled: org.settings.chatbotEnabled,
           whatsappEnabled: org.settings.whatsappEnabled,
           voiceEnabled: org.settings.voiceEnabled,
           whatsappSystemPrompt: org.settings.whatsappSystemPrompt,
+          instagramEnabled: org.settings.instagramEnabled,
+          instagramSystemPrompt: org.settings.instagramSystemPrompt,
+          instagramBusinessId: org.settings.instagramBusinessId,
+          instagramAccessToken: org.settings.instagramAccessToken,
+          facebookEnabled: org.settings.facebookEnabled,
+          facebookSystemPrompt: org.settings.facebookSystemPrompt,
+          facebookPageId: org.settings.facebookPageId,
+          facebookPageAccessToken: org.settings.facebookPageAccessToken,
+          calComApiKey: org.settings.calComApiKey,
+          calComEventTypeId: org.settings.calComEventTypeId,
         }),
       });
       if (!res.ok) {
