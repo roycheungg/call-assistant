@@ -279,12 +279,30 @@ async function handleEndOfCallReport(message: any) {
   const transcript = artifact.transcript || message.transcript || null;
 
   // Vapi structured outputs (when configured per-template on the assistant)
-  // arrive in `analysis.structuredData`. Keys can be either the template
-  // name verbatim (e.g. "Call Summary") or a camelCased variant — we check
-  // both. Falls back to Vapi's default `analysis.summary`, then to our
-  // homegrown transcript parser as a last resort.
+  // arrive in `analysis.structuredData`. Vapi keys each template by a UUID
+  // with `{ name, result }` inside — we flatten by `name` so the rest of
+  // this code can read `structured["Call Summary"]` directly. Also supports
+  // the flat `{ "Call Summary": "..." }` shape and camelCased keys, just in
+  // case Vapi changes the format. Falls back to Vapi's default
+  // `analysis.summary`, then to our homegrown transcript parser.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const structured: Record<string, any> = analysis.structuredData || {};
+  const rawStructured: Record<string, any> = analysis.structuredData || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const structured: Record<string, any> = {};
+  for (const [k, v] of Object.entries(rawStructured)) {
+    if (
+      v &&
+      typeof v === "object" &&
+      !Array.isArray(v) &&
+      "name" in v &&
+      "result" in v
+    ) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      structured[(v as any).name] = (v as any).result;
+    } else {
+      structured[k] = v;
+    }
+  }
   let summary =
     structured["Call Summary"] ||
     structured.callSummary ||
