@@ -375,31 +375,26 @@ async function processMessageEvent(
     // so we park them as a synthetic phone using the sender id. This
     // matches how the website chat handles phone-less leads today.
     const syntheticPhone = `${channel}-${senderId.slice(0, 16)}`;
-    let lead = await prisma.lead.findUnique({
+    // Atomic upsert — concurrent inbound DMs from the same sender used to
+    // race here (findUnique-then-create) and one would hit P2002 → 500 →
+    // Meta retried. upsert eliminates the race. Update branch is empty:
+    // we don't want to clobber an operator-edited name. (See WA webhook
+    // for the same trade-off.)
+    const lead = await prisma.lead.upsert({
       where: {
         organizationId_phone: {
           organizationId: ctx.organizationId,
           phone: syntheticPhone,
         },
       },
+      create: {
+        organizationId: ctx.organizationId,
+        phone: syntheticPhone,
+        name: profile.name,
+        source: channel,
+      },
+      update: {},
     });
-    if (!lead) {
-      lead = await prisma.lead.create({
-        data: {
-          organizationId: ctx.organizationId,
-          phone: syntheticPhone,
-          name: profile.name,
-          source: channel,
-        },
-      });
-    } else if (profile.name && !lead.name) {
-      // Lead existed (re-creation race / earlier failed fetch) but had no
-      // name. Fill it in now.
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { name: profile.name },
-      });
-    }
 
     conversation = await prisma.socialConversation.create({
       data: {

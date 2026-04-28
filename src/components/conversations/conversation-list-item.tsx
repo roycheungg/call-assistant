@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Star } from "lucide-react";
 import {
@@ -63,6 +64,11 @@ export function ConversationListItem({
   const avatarColor = avatarColorFor(contactName || phoneNumber);
   const badge = channel ? CHANNEL_META[channel] : null;
   const ChannelIcon = badge?.icon;
+  // Meta CDN URLs for IG/FB profile pics expire (~24h). When the cached
+  // URL 404s the Image silently shows a broken icon. Track the load
+  // failure and fall back to the coloured initials avatar.
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = profilePicUrl && !imgFailed;
 
   return (
     <button
@@ -75,7 +81,7 @@ export function ConversationListItem({
       )}
     >
       <div className="relative shrink-0">
-        {profilePicUrl ? (
+        {showImage ? (
           <Image
             src={profilePicUrl}
             alt={contactName || ""}
@@ -83,6 +89,7 @@ export function ConversationListItem({
             height={40}
             className="w-10 h-10 rounded-full object-cover"
             unoptimized
+            onError={() => setImgFailed(true)}
           />
         ) : (
           <div

@@ -156,31 +156,35 @@ export async function POST(req: NextRequest) {
       };
 
       if (phone) {
+        // Atomic upsert. The earlier findUnique-then-create branch would
+        // race when two messages from the same visitor arrived back-to-
+        // back. We still want the "fill in null fields" behaviour from
+        // the old update branch, so we read the row back first to compute
+        // the merged update — but the create-vs-update arbitration itself
+        // is atomic at DB level.
         const existing = await prisma.lead.findUnique({
-          where: { organizationId_phone: { organizationId: site.organizationId, phone } },
+          where: {
+            organizationId_phone: { organizationId: site.organizationId, phone },
+          },
         });
-        if (existing) {
-          updateData.leadId = existing.id;
-          await prisma.lead.update({
-            where: { id: existing.id },
-            data: {
-              name: existing.name || lead.name || null,
-              email: existing.email || lead.email || null,
-            },
-          });
-        } else {
-          const created = await prisma.lead.create({
-            data: {
-              organizationId: site.organizationId,
-              name: lead.name || null,
-              email: lead.email,
-              phone,
-              source: "website",
-              notes: lead.summary || null,
-            },
-          });
-          updateData.leadId = created.id;
-        }
+        const upserted = await prisma.lead.upsert({
+          where: {
+            organizationId_phone: { organizationId: site.organizationId, phone },
+          },
+          create: {
+            organizationId: site.organizationId,
+            name: lead.name || null,
+            email: lead.email,
+            phone,
+            source: "website",
+            notes: lead.summary || null,
+          },
+          update: {
+            name: existing?.name || lead.name || null,
+            email: existing?.email || lead.email || null,
+          },
+        });
+        updateData.leadId = upserted.id;
       }
 
       await prisma.websiteConversation.update({

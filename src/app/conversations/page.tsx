@@ -108,7 +108,16 @@ export default function ConversationsPage() {
   const [selectedChannel, setSelectedChannel] = useState<Channel>("whatsapp");
   const [filter, setFilter] = useState<Filter>("all");
   const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
+  // `search` is what the user is typing right now; `searchDebounced` is
+  // what we actually query against. The debounce stops every keystroke
+  // from firing 4 parallel Prisma calls. 350ms balances responsiveness
+  // and quietness.
   const [search, setSearch] = useState("");
+  const [searchDebounced, setSearchDebounced] = useState("");
+  useEffect(() => {
+    const id = setTimeout(() => setSearchDebounced(search), 350);
+    return () => clearTimeout(id);
+  }, [search]);
   // Per-org channel feature flags. `null` while loading; once loaded, the
   // tab list is filtered to only enabled channels and any previously-
   // selected disabled channel auto-resets to "all".
@@ -156,7 +165,7 @@ export default function ConversationsPage() {
       const params = new URLSearchParams();
       if (filter !== "all") params.set("filter", filter);
       if (channelFilter !== "all") params.set("channel", channelFilter);
-      if (search) params.set("search", search);
+      if (searchDebounced) params.set("search", searchDebounced);
       const res = await apiFetch(`/api/conversations?${params}`);
       const data = await res.json();
       setConversations(data.conversations || []);
@@ -165,7 +174,7 @@ export default function ConversationsPage() {
     } finally {
       setLoading(false);
     }
-  }, [filter, channelFilter, search]);
+  }, [filter, channelFilter, searchDebounced]);
 
   useEffect(() => {
     fetchConversations();
@@ -183,12 +192,25 @@ export default function ConversationsPage() {
       setActiveConversation(data);
 
       if (!data.isRead) {
-        apiFetch(`/api/conversations/${id}/read?channel=${channel}`, {
-          method: "PATCH",
-        });
+        // Optimistic flip: mark read in the list immediately for snappy
+        // UX, then await the PATCH and revert on failure. Earlier this
+        // was fire-and-forget — a 500 left the UI showing read while the
+        // DB still said unread, and the next reload looked stale.
         setConversations((prev) =>
           prev.map((c) => (c.id === id ? { ...c, isRead: true } : c))
         );
+        try {
+          const pr = await apiFetch(
+            `/api/conversations/${id}/read?channel=${channel}`,
+            { method: "PATCH" }
+          );
+          if (!pr.ok) throw new Error("read PATCH failed");
+        } catch (err) {
+          console.error("Failed to mark read:", err);
+          setConversations((prev) =>
+            prev.map((c) => (c.id === id ? { ...c, isRead: false } : c))
+          );
+        }
       }
     } catch (error) {
       console.error("Failed to fetch conversation:", error);
@@ -386,14 +408,23 @@ export default function ConversationsPage() {
             </header>
 
             <div className="flex-1 overflow-y-auto p-3 md:p-4 space-y-3">
-              {activeConversation.messages.map((msg) => (
-                <MessageBubble
-                  key={msg.id}
-                  role={msg.role}
-                  content={msg.content}
-                  createdAt={msg.createdAt}
-                />
-              ))}
+              {activeConversation.messages.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full text-center px-4">
+                  <MessageCircle className="w-6 h-6 text-slate-600 mb-2" />
+                  <p className="text-xs text-slate-500">
+                    No messages yet in this conversation.
+                  </p>
+                </div>
+              ) : (
+                activeConversation.messages.map((msg) => (
+                  <MessageBubble
+                    key={msg.id}
+                    role={msg.role}
+                    content={msg.content}
+                    createdAt={msg.createdAt}
+                  />
+                ))
+              )}
               <div ref={messagesEndRef} />
             </div>
           </>

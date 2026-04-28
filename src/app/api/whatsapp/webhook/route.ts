@@ -160,25 +160,26 @@ async function processMessage(
   });
 
   if (!conversation) {
-    // Find or create lead (scoped to this org)
-    let lead = await prisma.lead.findUnique({
+    // Upsert lead (scoped to this org). Earlier we did findUnique-then-
+    // create which raced under burst inbound: two near-simultaneous
+    // messages from the same sender both saw "no lead", both tried to
+    // create, and one hit @@unique([organizationId, phone]) → P2002 →
+    // 500 → Meta retries. upsert is atomic at DB level.
+    //
+    // Update branch is intentionally empty: WA profile names are basically
+    // constant per sender, and we don't want to clobber an operator-edited
+    // name. Backfilling first-time-null names on a later message is rare
+    // enough to defer.
+    const lead = await prisma.lead.upsert({
       where: { organizationId_phone: { organizationId, phone } },
+      create: {
+        organizationId,
+        phone,
+        name: contactName,
+        source: "whatsapp",
+      },
+      update: {},
     });
-    if (!lead) {
-      lead = await prisma.lead.create({
-        data: {
-          organizationId,
-          phone,
-          name: contactName,
-          source: "whatsapp",
-        },
-      });
-    } else if (contactName && !lead.name) {
-      await prisma.lead.update({
-        where: { id: lead.id },
-        data: { name: contactName },
-      });
-    }
 
     conversation = await prisma.whatsAppConversation.create({
       data: {

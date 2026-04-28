@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
@@ -40,19 +41,24 @@ export function ContactPanel({ conversation, onToggleStar }: ContactPanelProps) 
   const avatarColor = avatarColorFor(
     nameForDisplay || conversation.phoneNumber
   );
+  // Same fallback story as conversation-list-item: Meta CDN URLs expire,
+  // so detect load failure and render the coloured initials avatar.
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = conversation.profilePicUrl && !imgFailed;
 
   return (
     <div className="h-full w-full flex flex-col">
       {/* Header */}
       <div className="p-4 flex flex-col items-center text-center border-b border-white/10">
-        {conversation.profilePicUrl ? (
+        {showImage ? (
           <Image
-            src={conversation.profilePicUrl}
+            src={conversation.profilePicUrl!}
             alt={displayName}
             width={64}
             height={64}
             className="w-16 h-16 rounded-full object-cover mb-3"
             unoptimized
+            onError={() => setImgFailed(true)}
           />
         ) : (
           <div

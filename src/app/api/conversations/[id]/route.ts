@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenant, isErrorResponse } from "@/lib/tenant";
+import { isChannelEnabled, type Channel } from "@/lib/channel-flags";
 
 export async function GET(
   req: NextRequest,
@@ -12,7 +13,22 @@ export async function GET(
   try {
     const { id } = await params;
     const { searchParams } = new URL(req.url);
-    const channel = searchParams.get("channel") || "whatsapp";
+    const channelRaw = searchParams.get("channel") || "whatsapp";
+    if (
+      channelRaw !== "whatsapp" &&
+      channelRaw !== "website" &&
+      channelRaw !== "instagram" &&
+      channelRaw !== "facebook"
+    ) {
+      return NextResponse.json({ error: "Invalid channel" }, { status: 400 });
+    }
+    const channel = channelRaw as Channel;
+
+    // Match the list endpoint's flag gating — disabled channels 404 even on
+    // direct-link / deep-link access.
+    if (!(await isChannelEnabled(ctx.organizationId, channel))) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
 
     if (channel === "website") {
       const conv = await prisma.websiteConversation.findUnique({
